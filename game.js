@@ -117,7 +117,19 @@ function freshState(player){
        grain:560,fodder:180,laborers:72,laborMix:{clan:25,slave:47},morale:69,supplyState:"畅通",supplyPath:["zhouyuan"]},
       {id:"a3",owner:"gaodi",name:"高地战团",at:"gaodi",previous:"gaodi",commander:"gaodi_lord",
        units:[{type:"clan_levy",men:240,morale:54},{type:"archer",men:80,morale:58}],
-       grain:390,fodder:170,laborers:50,laborMix:{clan:20,slave:30},morale:65,supplyState:"畅通",supplyPath:["gaodi"]}
+       grain:390,fodder:170,laborers:50,laborMix:{clan:20,slave:30},morale:65,supplyState:"畅通",supplyPath:["gaodi"]},
+      {id:"a4",owner:"dongfang",name:"东方联军",at:"qianzhangda",previous:"qianzhangda",commander:"east_lord",
+       units:[{type:"clan_levy",men:300,morale:52},{type:"archer",men:80,morale:56},{type:"bronze_ge",men:80,morale:67},{type:"chariot",men:16,morale:76}],
+       grain:570,fodder:260,laborers:72,laborMix:{clan:32,slave:40},morale:66,supplyState:"畅通",supplyPath:["qianzhangda"]},
+      {id:"a5",owner:"jianghan",name:"江汉军",at:"jianghan",previous:"jianghan",commander:"jiang_lord",
+       units:[{type:"clan_levy",men:260,morale:51},{type:"archer",men:80,morale:57}],
+       grain:430,fodder:120,laborers:48,laborMix:{clan:18,slave:30},morale:61,supplyState:"畅通",supplyPath:["jianghan"]},
+      {id:"a6",owner:"wucheng",name:"吴城军",at:"wucheng",previous:"wucheng",commander:"wu_lord",
+       units:[{type:"clan_levy",men:220,morale:52},{type:"bronze_ge",men:80,morale:67},{type:"archer",men:80,morale:56}],
+       grain:470,fodder:100,laborers:52,laborMix:{clan:22,slave:30},morale:63,supplyState:"畅通",supplyPath:["wucheng"]},
+      {id:"a7",owner:"shu",name:"蜀地军",at:"shu",previous:"shu",commander:"shu_lord",
+       units:[{type:"clan_levy",men:280,morale:53},{type:"bronze_spear",men:80,morale:66},{type:"archer",men:80,morale:57}],
+       grain:620,fodder:150,laborers:65,laborMix:{clan:25,slave:40},morale:65,supplyState:"畅通",supplyPath:["shu"]}
     ],
     training:[],
     wars:{"gaodi|shang":true},
@@ -897,8 +909,9 @@ function endTurn(){
   processSieges();
   consumeArmies();
   if(state.season===2)harvest();
-  ["shang","zhou","gaodi"].forEach(function(owner){if(owner!==state.player)aiRecruit(owner);});
-  const actions=["shang","zhou","gaodi"].filter(function(o){return o!==state.player;}).map(chooseAiAction).filter(Boolean);
+  const activeFactions=Object.keys(state.factions).filter(function(owner){return owner!=="neutral";});
+  activeFactions.forEach(function(owner){if(owner!==state.player)aiRecruit(owner);});
+  const actions=activeFactions.filter(function(o){return o!==state.player;}).map(chooseAiAction).filter(Boolean);
 
   runAiActions(actions,0,function(){
     if(state.gameOver){turnBusy=false;render();return;}
