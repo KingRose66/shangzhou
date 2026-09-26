@@ -39,8 +39,8 @@ for (const [id,u] of Object.entries(D.units)) {
 
 const html=fs.readFileSync("index.html","utf8");
 for (const id of [
-  "map","armies","army-detail","diplomacy-detail","battle-overlay","battle-canvas",
-  "btn-end-turn","btn-assault","btn-demand-tribute"
+  "map","armies","army-detail","diplomacy-detail","encounter-overlay","battle-overlay","battle-canvas",
+  "btn-end-turn","btn-march","btn-scout","btn-assault","btn-demand-tribute","encounter-command","encounter-auto","encounter-retreat"
 ]) {
   if(!html.includes(`id="${id}"`)) throw new Error(`Missing DOM id ${id}`);
 }
