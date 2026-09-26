@@ -1425,7 +1425,7 @@ function showNewGame(){
   $("#newgame-overlay").classList.add("show");
 }
 
-$("[data-unit]").forEach(function(b){
+$$("[data-unit]").forEach(function(b){
   const u=DATA.units[b.dataset.unit];
   if(u){
     b.textContent=u.name+" "+u.size;
