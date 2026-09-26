@@ -532,6 +532,52 @@ function releaseLabor(amount){
   render();
 }
 
+function splitArmy(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player)return notice("请选择我方军队。");
+  if(armyMen(a)<240)return notice("兵力太少，不适合继续分军。");
+  const newUnits=[];
+  a.units.forEach(function(u){
+    if(u.men>=60){
+      const n=Math.floor(u.men/2);
+      u.men-=n;newUnits.push({type:u.type,men:n,morale:u.morale});
+    }
+  });
+  if(!newUnits.length)return notice("没有足够完整的单位可拆分。");
+  const labor=Math.floor(a.laborers/2),grain=a.grain/2,fodder=a.fodder/2;
+  a.laborers-=labor;a.grain-=grain;a.fodder-=fodder;
+  const slave=Math.floor((a.laborMix.slave||0)/2),clan=Math.floor((a.laborMix.clan||0)/2);
+  a.laborMix.slave-=slave;a.laborMix.clan-=clan;
+  const n={id:nextId("a"),owner:a.owner,name:a.name+"偏师",at:a.at,previous:a.previous,commander:null,
+    units:newUnits,grain:grain,fodder:fodder,laborers:labor,laborMix:{slave:slave,clan:clan},
+    morale:Math.max(45,a.morale-2),supplyState:a.supplyState,supplyPath:(a.supplyPath||[]).slice()};
+  state.armies.push(n);
+  state.selectedArmy=n.id;
+  addLog(a.name+"分出 "+armyMen(n)+" 人组成偏师。","good");
+  render();
+}
+function mergeArmies(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player)return notice("请选择我方军队。");
+  const others=state.armies.filter(function(x){return x.id!==a.id&&x.owner===a.owner&&x.at===a.at;});
+  if(!others.length)return notice("同一地点没有其他我方军队可合并。");
+  others.forEach(function(o){
+    o.units.forEach(function(u){
+      const same=a.units.find(function(x){return x.type===u.type;});
+      if(same){same.men+=u.men;same.morale=Math.round((same.morale+u.morale)/2);}
+      else a.units.push(u);
+    });
+    a.grain+=o.grain;a.fodder+=o.fodder;a.laborers+=o.laborers;
+    a.laborMix.clan=(a.laborMix.clan||0)+(o.laborMix.clan||0);
+    a.laborMix.slave=(a.laborMix.slave||0)+(o.laborMix.slave||0);
+    if(!a.commander&&o.commander)a.commander=o.commander;
+  });
+  const ids=new Set(others.map(function(x){return x.id;}));
+  state.armies=state.armies.filter(function(x){return !ids.has(x.id);});
+  addLog(a.name+"在"+getSet(a.at).name+"完成合军，现有 "+armyMen(a)+" 人。","good");
+  render();
+}
+
 function supplyPathFor(a){
   const owner=a.owner;
   const q=[{id:a.at,path:[a.at]}],visited=new Set([a.at]);
@@ -1235,6 +1281,8 @@ $("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#btn-assault").onclick=assaultCurrentSiege;
+$("#btn-split-army").onclick=splitArmy;
+$("#btn-merge-armies").onclick=mergeArmies;
 $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、青铜正规军和战车需训练。人口、兵器、贝、粮食都真实扣除。";
 
 state=freshState("shang");
