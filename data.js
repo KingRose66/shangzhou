@@ -218,43 +218,49 @@ const GAME_DATA = {
     slave_levy:{
       name:"征发奴隶",short:"奴隶兵",size:120,kind:"levy",population:"slave",
       weapon:"wood",weaponNeed:100,shell:20,grain:30,fodder:0,train:0,laborNeed:8,
-      morale:32,order:29,melee:18,missile:0,armor:5,speed:44,terrain:"foot",
+      morale:32,order:29,melee:18,missile:0,range:0,armor:5,speed:44,terrain:"foot",confidence:"C",
       description:"从奴隶人口中临时征发，配发木、骨制简易兵器。成军快，士气低。"
     },
     clan_levy:{
       name:"族兵",short:"族兵",size:100,kind:"levy",population:"clan",
       weapon:"wood",weaponNeed:80,shell:34,grain:35,fodder:0,train:0,laborNeed:8,
-      morale:50,order:48,melee:28,missile:0,armor:8,speed:46,terrain:"foot",
+      morale:50,order:48,melee:28,missile:0,range:0,armor:8,speed:46,terrain:"foot",confidence:"C",
       description:"由族人临时征召的基础步兵。组织和士气优于奴隶兵。"
     },
     archer:{
       name:"弓手",short:"弓手",size:80,kind:"trained",population:"clan",
       weapon:"bow",weaponNeed:80,shell:82,grain:45,fodder:0,train:1,laborNeed:7,
-      morale:56,order:52,melee:14,missile:40,armor:5,speed:47,terrain:"foot",
+      morale:56,order:52,melee:14,missile:40,range:190,armor:5,speed:47,terrain:"foot",confidence:"A",
       description:"受过基础编练的远射兵。适合扰乱敌军队形和士气。"
+    },
+    hunter:{
+      name:"猎手投矛兵",short:"投矛",size:80,kind:"trained",population:"clan",
+      weapon:"wood",weaponNeed:70,shell:58,grain:38,fodder:0,train:1,laborNeed:6,
+      morale:52,order:45,melee:23,missile:29,range:108,armor:4,speed:52,terrain:"light",confidence:"C",
+      description:"由猎手与轻装人员编成的近距离投射兵。作为合理玩法复原，不宣称存在同名正规军制。"
     },
     bronze_ge:{
       name:"青铜戈兵",short:"戈兵",size:80,kind:"regular",population:"clan",
       weapon:"ge",weaponNeed:80,shell:145,grain:65,fodder:0,train:2,laborNeed:10,
-      morale:68,order:69,melee:57,missile:0,armor:18,speed:43,terrain:"foot",
+      morale:68,order:69,melee:57,missile:0,range:0,armor:18,speed:43,terrain:"foot",confidence:"B",
       description:"装备青铜戈的正规步兵，需要时间训练成军。"
     },
     bronze_spear:{
       name:"青铜矛兵",short:"矛兵",size:80,kind:"regular",population:"clan",
       weapon:"spear",weaponNeed:80,shell:140,grain:65,fodder:0,train:2,laborNeed:10,
-      morale:66,order:72,melee:54,missile:0,armor:17,speed:42,terrain:"foot",
+      morale:66,order:72,melee:54,missile:0,range:0,armor:17,speed:42,terrain:"foot",confidence:"B",
       description:"正规矛兵，正面守阵和抗击车乘能力更好。"
     },
     royal_guard:{
       name:"王族甲士",short:"甲士",size:60,kind:"elite",population:"clan",
       weapon:"ge",weaponNeed:60,shell:240,grain:90,fodder:0,train:3,laborNeed:10,
-      morale:82,order:82,melee:72,missile:0,armor:36,speed:41,terrain:"foot",
+      morale:82,order:82,melee:72,missile:0,range:0,armor:36,speed:41,terrain:"foot",confidence:"C",
       description:"少量精锐家臣与甲士，昂贵但极难被正面击溃。"
     },
     chariot:{
       name:"战车乘",short:"战车",size:24,kind:"regular",population:"clan",
       weapon:"chariot",weaponNeed:6,shell:300,grain:90,fodder:140,train:3,laborNeed:18,
-      morale:79,order:76,melee:64,missile:24,armor:24,speed:82,terrain:"chariot",
+      morale:79,order:76,melee:64,missile:24,range:145,armor:24,speed:82,terrain:"chariot",confidence:"A",
       description:"六乘为一队的贵族车战编制。擅长机动、侧击、威慑和追击。"
     }
   },
