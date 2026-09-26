@@ -549,6 +549,8 @@ function renderArmyDetail(){
     return '<div class="unit-row"><span>'+DATA.units[u.type].name+'</span><b>'+fmt(u.men)+'</b></div>';
   }).join("");
   const path=(a.supplyPath||[]).map(function(id){return getSet(id).name;}).join(" → ");
+  const quarterlyUse=Math.max(1,armyMen(a)*.022+a.laborers*.009);
+  const endurance=a.grain/quarterlyUse;
   const siege=state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id?state.sieges[a.at]:null;
   $("#army-detail").innerHTML=
     '<div class="stats">'+
