@@ -65,6 +65,8 @@ repeating-linear-gradient(110deg,transparent 0 34px,rgba(255,255,255,.014) 35px 
 .terrain-backdrop .region-label{fill:rgba(224,205,164,.18);font-size:24px;letter-spacing:7px;font-family:Georgia,"Noto Serif SC",serif}
 .route{position:absolute;height:2px;background:rgba(177,150,104,.42);transform-origin:left center;z-index:1}
 .route.blocked{background:rgba(166,69,54,.65)}
+.route.supply-route{height:4px;background:rgba(118,168,101,.78);box-shadow:0 0 7px rgba(118,168,101,.38)}
+.route.blocked.supply-route{background:rgba(181,88,62,.82);box-shadow:0 0 7px rgba(181,88,62,.35)}
 .node{position:absolute;width:16px;height:16px;border:2px solid #eadab6;border-radius:50%;transform:translate(-50%,-50%);z-index:3;box-shadow:0 0 0 4px rgba(0,0,0,.23);cursor:pointer}
 .node.capital{width:22px;height:22px}
 .node.selected{outline:3px solid rgba(255,240,180,.55)}
