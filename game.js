@@ -122,6 +122,7 @@ function freshState(player){
     training:[],
     wars:{"gaodi|shang":true},
     tribute:{},
+    sieges:{},
     selectedSettlement:player==="zhou"?"zhouyuan":"yin",
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
@@ -335,6 +336,7 @@ function renderArmyDetail(){
   const a=getArmy(state.selectedArmy);
   if(!a||a.owner!==state.player){
     $("#army-detail").innerHTML='<span class="muted">请选择一支我方军队。</span>';
+    $("#btn-assault").disabled=true;
     return;
   }
   const available=state.characters.filter(function(c){return c.faction===state.player&&c.alive;});
@@ -345,6 +347,7 @@ function renderArmyDetail(){
     return '<div class="unit-row"><span>'+DATA.units[u.type].name+'</span><b>'+fmt(u.men)+'</b></div>';
   }).join("");
   const path=(a.supplyPath||[]).map(function(id){return getSet(id).name;}).join(" → ");
+  const siege=state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id?state.sieges[a.at]:null;
   $("#army-detail").innerHTML=
     '<div class="stats">'+
       '<span>兵力</span><b>'+fmt(armyMen(a))+'</b>'+
@@ -356,8 +359,10 @@ function renderArmyDetail(){
     '</div>'+
     '<div class="army-orders"><label>统军将领</label><select id="commander-select">'+options+'</select></div>'+
     '<div class="unit-list">'+rows+'</div>'+
-    '<p class="small muted">粮道：'+(path||"无可用路径")+'</p>';
+    '<p class="small muted">粮道：'+(path||"无可用路径")+'</p>'+
+    (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
+  $("#btn-assault").disabled=!siege;
 }
 
 function renderTraining(){
@@ -485,6 +490,80 @@ function marchCost(a,dest){
   const fodder=chariotCount(a)*8*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
   return {grain:grain,fodder:fodder};
 }
+function beginSiege(a,city){
+  state.sieges[city.id]={attackerArmyId:a.id,owner:a.owner,turns:0};
+  addLog(a.name+"开始围困"+city.name+"。若持续封锁，其粮储与守备会逐季恶化。","warning");
+}
+function processSieges(){
+  Object.keys(state.sieges).forEach(function(cityId){
+    const siege=state.sieges[cityId],city=getSet(cityId),army=getArmy(siege.attackerArmyId);
+    if(!city||!army||army.at!==cityId||city.owner===army.owner){
+      delete state.sieges[cityId];return;
+    }
+    siege.turns++;
+    const pop=city.pop.clan+city.pop.slave;
+    const pressure=Math.max(90,Math.round(pop*.018));
+    city.grain=Math.max(0,city.grain-pressure);
+    if(army.owner===state.player)addLog(city.name+"被围困：城内额外消耗 "+pressure+" 石粮。","warning");
+    if(city.grain<=0&&siege.turns>=2){
+      const chance=Math.min(.82,.32+siege.turns*.12+faction(army.owner).prestige/400);
+      if(Math.random()<chance){
+        addLog(city.name+"粮尽，守者开门屈服。","good");
+        occupySettlement(army,city);
+        delete state.sieges[cityId];
+      }
+    }
+  });
+}
+function createSiegeGarrison(city){
+  const owner=city.owner;
+  const maxClan=Math.min(city.pop.clan,Math.max(160,Math.round((city.pop.clan+city.pop.slave)*.045)));
+  let remaining=maxClan;
+  const units=[];
+  if(city.weapons.spear>=80&&remaining>=80){
+    units.push({type:"bronze_spear",men:80,morale:62});city.weapons.spear-=80;remaining-=80;
+  }else if(city.weapons.ge>=80&&remaining>=80){
+    units.push({type:"bronze_ge",men:80,morale:64});city.weapons.ge-=80;remaining-=80;
+  }
+  if(city.weapons.bow>=80&&remaining>=80){
+    units.push({type:"archer",men:80,morale:54});city.weapons.bow-=80;remaining-=80;
+  }
+  while(remaining>=100&&city.weapons.wood>=80){
+    units.push({type:"clan_levy",men:100,morale:48});city.weapons.wood-=80;remaining-=100;
+  }
+  const used=units.reduce(function(n,u){return n+u.men;},0);
+  city.pop.clan=Math.max(0,city.pop.clan-used);
+  if(!units.length){
+    const emergency=Math.min(120,city.pop.slave);
+    if(emergency>0){
+      units.push({type:"slave_levy",men:emergency,morale:30});
+      city.pop.slave-=emergency;
+    }
+  }
+  const g={id:nextId("g"),owner:owner,name:city.name+"守军",at:city.id,previous:city.id,commander:null,
+    units:units,grain:Math.min(220,city.grain*.08),fodder:0,laborers:25,laborMix:{clan:10,slave:15},
+    morale:Math.min(72,54+city.wall*8),supplyState:"畅通",supplyPath:[city.id],temporaryGarrison:true};
+  state.armies.push(g);
+  return g;
+}
+function assaultCurrentSiege(){
+  const a=getArmy(state.selectedArmy);
+  if(!a)return notice("请选择正在围城的军队。");
+  const siege=state.sieges[a.at];
+  if(!siege||siege.attackerArmyId!==a.id)return notice("该军当前没有围困城邑。");
+  const city=getSet(a.at);
+  const garrison=createSiegeGarrison(city);
+  if(!garrison.units.length||armyMen(garrison)<=0){
+    occupySettlement(a,city);delete state.sieges[city.id];render();return;
+  }
+  addLog(a.name+"对"+city.name+"发动强攻。","warning");
+  beginEncounter(a,garrison,a.previous||city.id,function(){
+    if(city.owner===a.owner)delete state.sieges[city.id];
+    else if(!getArmy(a.id)||a.at!==city.id)delete state.sieges[city.id];
+    render();
+  });
+}
+
 function moveArmy(a,targetId,after){
   if(turnBusy||state.gameOver)return;
   const origin=getSet(a.at),dest=getSet(targetId);
@@ -506,7 +585,10 @@ function moveArmy(a,targetId,after){
   if(enemies.length){
     beginEncounter(a,enemies[0],origin.id,after);
   }else{
-    if(dest.owner!==a.owner)occupySettlement(a,dest);
+    if(dest.owner!==a.owner){
+      if(dest.wall>0)beginSiege(a,dest);
+      else occupySettlement(a,dest);
+    }
     render();
     if(after)after();
   }
@@ -515,6 +597,7 @@ function occupySettlement(a,city){
   const old=city.owner;
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
   city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
+  delete state.sieges[city.id];
   faction(a.owner).prestige+=2;
   addLog(city.name+"在无成建制守军情况下屈服于"+ownerName(a.owner)+"；约 "+capt+" 人被编为奴隶/俘口。","good");
   if(old===state.player)addLog("失去聚落 "+city.name+"。","bad");
@@ -776,7 +859,10 @@ function runAiActions(actions,index,done){
       runAiActions(actions,index+1,done);
     }
   }else{
-    if(dest.owner!==a.owner)occupySettlement(a,dest);
+    if(dest.owner!==a.owner){
+      if(dest.wall>0)beginSiege(a,dest);
+      else occupySettlement(a,dest);
+    }
     runAiActions(actions,index+1,done);
   }
 }
@@ -805,6 +891,7 @@ function endTurn(){
   processTraining();
   settlementEconomy();
   processTribute();
+  processSieges();
   consumeArmies();
   if(state.season===2)harvest();
   ["shang","zhou","gaodi"].forEach(function(owner){if(owner!==state.player)aiRecruit(owner);});
@@ -1045,6 +1132,7 @@ $("#btn-demand-tribute").onclick=demandTribute;
 $("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
+$("#btn-assault").onclick=assaultCurrentSiege;
 $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、青铜正规军和战车需训练。人口、兵器、贝、粮食都真实扣除。";
 
 state=freshState("shang");
