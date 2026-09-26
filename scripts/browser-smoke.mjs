@@ -4,6 +4,8 @@ import { JSDOM } from "jsdom";
 const html=fs.readFileSync("index.html","utf8");
 const dom=new JSDOM(html,{url:"https://example.test/",runScripts:"outside-only",pretendToBeVisual:true});
 const {window}=dom;
+const runtimeErrors=[];
+window.addEventListener("error",e=>runtimeErrors.push(String(e.error||e.message||"window error")));
 
 window.alert=()=>{};
 window.confirm=()=>true;
@@ -56,4 +58,5 @@ assert(dateBefore!==dateAfter,"end turn did not advance date");
 
 assert(window.document.querySelector("#diplomacy-detail"),"diplomacy UI missing");
 assert(window.document.querySelector("#battle-canvas"),"battle canvas missing");
+assert(runtimeErrors.length===0,"browser runtime errors: "+runtimeErrors.join(" | "));
 console.log("Browser smoke test passed.");
