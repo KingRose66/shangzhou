@@ -29,10 +29,17 @@ for(const file of ["data.js","battle.js","game.js"]){
 
 const assert=(ok,msg)=>{if(!ok)throw new Error(msg);};
 
-window.document.querySelector('[data-faction-choice="shang"]').click();
-assert(window.document.querySelector("#hud-faction").textContent.includes("商"),"failed to start Shang game");
-assert(window.document.querySelectorAll(".node").length===window.GAME_DATA.settlements.length,"map node count mismatch");
+const playable=["shang","zhou","gaodi","dongfang","jianghan","wucheng","shu"];
+for (const factionId of playable) {
+  window.document.querySelector('[data-faction-choice="'+factionId+'"]').click();
+  assert(window.document.querySelector("#hud-faction").textContent.trim().length>0,"failed to start "+factionId);
+  assert(window.document.querySelectorAll(".node").length===window.GAME_DATA.settlements.length,"map node count mismatch for "+factionId);
+  const ownArmyCards=window.document.querySelectorAll(".army-card").length;
+  assert(ownArmyCards>=1,"no starting army rendered for "+factionId);
+  window.document.querySelector("#btn-new").click();
+}
 
+window.document.querySelector('[data-faction-choice="shang"]').click();
 const before=window.document.querySelector("#hud-clansmen").textContent;
 window.document.querySelector('[data-unit="clan_levy"]').click();
 const after=window.document.querySelector("#hud-clansmen").textContent;
