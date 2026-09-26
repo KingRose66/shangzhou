@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "0.3.0",
+  version: "0.4.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
@@ -7,19 +7,43 @@ const GAME_DATA = {
       name:"大邑商", short:"商", ruler:"文丁", color:"#a7523e",
       shells:5200, prestige:82, livestock:860,
       tech:["piece_mold","chariot_craft","royal_divination"],
-      relations:{zhou:35,gaodi:-15,neutral:0}
+      relations:{zhou:35,gaodi:-15,dongfang:-8,jianghan:5,wucheng:0,shu:2,neutral:0}
     },
     zhou: {
       name:"周", short:"周", ruler:"季历", color:"#c4a64d",
       shells:2450, prestige:46, livestock:420,
       tech:["lineage_muster","wei_farming"],
-      relations:{shang:35,gaodi:8,neutral:5}
+      relations:{shang:35,gaodi:8,dongfang:0,jianghan:0,wucheng:0,shu:4,neutral:5}
     },
     gaodi: {
       name:"晋陕高地方", short:"高地", ruler:"高地君长", color:"#688c69",
       shells:1600, prestige:38, livestock:720,
       tech:["hill_march","pastoral_trade"],
-      relations:{shang:-15,zhou:8,neutral:0}
+      relations:{shang:-15,zhou:8,dongfang:0,jianghan:0,wucheng:0,shu:0,neutral:0}
+    },
+    dongfang: {
+      name:"东方诸方", short:"东方", ruler:"东方盟主", color:"#8e6b58",
+      shells:1900, prestige:44, livestock:460,
+      tech:["local_craft","lineage_muster"],
+      relations:{shang:-8,zhou:0,gaodi:0,jianghan:4,wucheng:0,shu:0,neutral:0}
+    },
+    jianghan: {
+      name:"江汉诸方", short:"江汉", ruler:"江汉君长", color:"#4e7b70",
+      shells:1550, prestige:39, livestock:390,
+      tech:["local_craft","long_supply"],
+      relations:{shang:5,zhou:0,gaodi:0,dongfang:4,wucheng:8,shu:2,neutral:0}
+    },
+    wucheng: {
+      name:"吴城文化诸邑", short:"吴城", ruler:"南方君长", color:"#7b5f82",
+      shells:1700, prestige:43, livestock:330,
+      tech:["improved_mold","local_craft"],
+      relations:{shang:0,zhou:0,gaodi:0,dongfang:0,jianghan:8,shu:3,neutral:0}
+    },
+    shu: {
+      name:"成都平原古蜀", short:"古蜀", ruler:"蜀地君长", color:"#94733c",
+      shells:2100, prestige:55, livestock:510,
+      tech:["improved_mold","highland_stock"],
+      relations:{shang:2,zhou:4,gaodi:0,dongfang:0,jianghan:2,wucheng:3,neutral:0}
     },
     neutral: {
       name:"小方与族邑", short:"小方", ruler:"族长", color:"#77716a",
@@ -36,21 +60,21 @@ const GAME_DATA = {
       pop:{clan:42500,slave:18400}, grain:18600,fodder:7200,bronze:1480,
       weapons:{wood:2600,bow:640,ge:930,spear:520,chariot:46},
       farm:88, forge:3, market:3, wall:1,
-      roads:["taihang","jinnan","nan"]
+      roads:["taihang","jinnan","nan","daxinzhuang"]
     },
     {
       id:"taihang",name:"太行东麓邑",owner:"shang",x:66,y:35,
       terrain:"hill",region:"太行山前",confidence:"C",
       pop:{clan:6900,slave:2100},grain:4600,fodder:1750,bronze:270,
       weapons:{wood:700,bow:160,ge:150,spear:90,chariot:8},
-      farm:61,forge:1,market:1,wall:1,roads:["yin","jinnan"]
+      farm:61,forge:1,market:1,wall:1,roads:["yin","jinnan","north"]
     },
     {
       id:"nan",name:"王畿南邑",owner:"shang",x:81,y:64,
       terrain:"plain",region:"豫北",confidence:"C",
       pop:{clan:9200,slave:3600},grain:6900,fodder:1900,bronze:220,
       weapons:{wood:1100,bow:120,ge:110,spear:70,chariot:4},
-      farm:82,forge:1,market:1,wall:0,roads:["yin"]
+      farm:82,forge:1,market:1,wall:0,roads:["yin","nanyang"]
     },
     {
       id:"jinnan",name:"晋南商系据点",owner:"shang",x:56,y:48,
@@ -71,21 +95,21 @@ const GAME_DATA = {
       terrain:"highland",region:"陕北清涧",confidence:"A",
       pop:{clan:7600,slave:1800},grain:3500,fodder:3700,bronze:260,
       weapons:{wood:1000,bow:230,ge:120,spear:65,chariot:7},
-      farm:43,forge:1,market:1,wall:1,roads:["jinnan","crossing","zhouyuan"]
+      farm:43,forge:1,market:1,wall:1,roads:["jinnan","crossing","zhouyuan","lijia"]
     },
     {
       id:"zhouyuan",name:"周原",owner:"zhou",x:29,y:58,capital:true,
       terrain:"plain",region:"岐山—扶风",confidence:"A",
       pop:{clan:17200,slave:5300},grain:10400,fodder:3900,bronze:510,
       weapons:{wood:1800,bow:320,ge:230,spear:160,chariot:13},
-      farm:86,forge:2,market:2,wall:1,roads:["crossing","gaodi","weis","west"]
+      farm:86,forge:2,market:2,wall:1,roads:["crossing","gaodi","weis","west","laoniupo"]
     },
     {
       id:"weis",name:"渭水东部邑",owner:"zhou",x:38,y:70,
       terrain:"plain",region:"关中东部",confidence:"C",
       pop:{clan:7800,slave:2100},grain:6200,fodder:2100,bronze:140,
       weapons:{wood:880,bow:120,ge:80,spear:55,chariot:3},
-      farm:90,forge:0,market:1,wall:0,roads:["zhouyuan"]
+      farm:90,forge:0,market:1,wall:0,roads:["zhouyuan","laoniupo"]
     },
     {
       id:"west",name:"西部诸邑",owner:"neutral",x:17,y:48,
@@ -93,6 +117,78 @@ const GAME_DATA = {
       pop:{clan:4100,slave:800},grain:2700,fodder:2600,bronze:90,
       weapons:{wood:520,bow:110,ge:35,spear:25,chariot:2},
       farm:48,forge:0,market:1,wall:0,roads:["zhouyuan"]
+    },
+    {id:"lijia",name:"李家崖诸聚落",owner:"gaodi",x:39,y:16,
+      terrain:"highland",region:"晋陕高地",confidence:"A",
+      pop:{clan:4300,slave:900},grain:2200,fodder:3100,bronze:170,
+      weapons:{wood:620,bow:130,ge:65,spear:40,chariot:3},
+      farm:36,forge:1,market:1,wall:1,roads:["gaodi","north"]
+    },
+    {id:"north",name:"北方贸易口",owner:"neutral",x:58,y:8,
+      terrain:"highland",region:"北方边缘",confidence:"C",
+      pop:{clan:2400,slave:420},grain:1300,fodder:2800,bronze:55,
+      weapons:{wood:330,bow:90,ge:20,spear:18,chariot:1},
+      farm:28,forge:0,market:2,wall:0,roads:["lijia","taihang"]
+    },
+    {id:"laoniupo",name:"老牛坡商文化据点",owner:"shang",x:41,y:70,
+      terrain:"plain",region:"关中东部",confidence:"B",
+      pop:{clan:4600,slave:1300},grain:3300,fodder:1500,bronze:160,
+      weapons:{wood:560,bow:90,ge:90,spear:55,chariot:4},
+      farm:69,forge:1,market:1,wall:1,roads:["zhouyuan","weis","hanzhong"]
+    },
+    {id:"daxinzhuang",name:"大辛庄",owner:"shang",x:90,y:40,
+      terrain:"plain",region:"济南地区",confidence:"A",
+      pop:{clan:9800,slave:3100},grain:6900,fodder:1900,bronze:250,
+      weapons:{wood:980,bow:180,ge:150,spear:95,chariot:7},
+      farm:79,forge:1,market:2,wall:1,roads:["yin","qianzhangda"]
+    },
+    {id:"qianzhangda",name:"前掌大",owner:"dongfang",x:92,y:57,capital:true,
+      terrain:"plain",region:"鲁南",confidence:"A",
+      pop:{clan:11200,slave:3200},grain:7200,fodder:2400,bronze:330,
+      weapons:{wood:1200,bow:210,ge:180,spear:105,chariot:9},
+      farm:76,forge:1,market:2,wall:1,roads:["daxinzhuang","haidai","huaibei"]
+    },
+    {id:"haidai",name:"海岱东部诸邑",owner:"dongfang",x:97,y:44,
+      terrain:"plain",region:"山东东部",confidence:"C",
+      pop:{clan:5600,slave:1100},grain:4300,fodder:1600,bronze:100,
+      weapons:{wood:650,bow:120,ge:55,spear:35,chariot:2},
+      farm:72,forge:0,market:2,wall:0,roads:["qianzhangda"]
+    },
+    {id:"huaibei",name:"淮北交通邑",owner:"neutral",x:85,y:71,
+      terrain:"river",region:"淮北",confidence:"C",
+      pop:{clan:5100,slave:1000},grain:3900,fodder:1400,bronze:80,
+      weapons:{wood:610,bow:130,ge:45,spear:30,chariot:1},
+      farm:77,forge:0,market:2,wall:0,roads:["qianzhangda","nanyang"]
+    },
+    {id:"nanyang",name:"江汉北部门户",owner:"neutral",x:71,y:75,
+      terrain:"rolling",region:"南阳—襄阳通道",confidence:"C",
+      pop:{clan:6500,slave:1400},grain:4700,fodder:1700,bronze:120,
+      weapons:{wood:760,bow:160,ge:65,spear:40,chariot:2},
+      farm:73,forge:0,market:2,wall:1,roads:["nan","huaibei","jianghan","hanzhong"]
+    },
+    {id:"jianghan",name:"江汉中心邑",owner:"jianghan",x:70,y:85,capital:true,
+      terrain:"river",region:"江汉平原",confidence:"C",
+      pop:{clan:10500,slave:2500},grain:7900,fodder:2200,bronze:260,
+      weapons:{wood:1200,bow:260,ge:125,spear:85,chariot:3},
+      farm:84,forge:1,market:2,wall:1,roads:["nanyang","wucheng"]
+    },
+    {id:"wucheng",name:"吴城",owner:"wucheng",x:82,y:92,capital:true,
+      terrain:"rolling",region:"赣江流域",confidence:"A",
+      pop:{clan:9200,slave:2100},grain:6200,fodder:1700,bronze:430,
+      weapons:{wood:980,bow:170,ge:190,spear:125,chariot:2},
+      farm:69,forge:2,market:2,wall:1,roads:["jianghan"]
+    },
+    {id:"hanzhong",name:"汉中交换节点",owner:"neutral",x:45,y:84,
+      terrain:"hill",region:"汉中盆地",confidence:"C",
+      pop:{clan:4800,slave:900},grain:3400,fodder:1800,bronze:95,
+      weapons:{wood:570,bow:125,ge:45,spear:35,chariot:1},
+      farm:63,forge:0,market:2,wall:1,roads:["nanyang","laoniupo","shu"]
+    },
+    {id:"shu",name:"成都平原古蜀中心",owner:"shu",x:23,y:91,capital:true,
+      terrain:"plain",region:"成都平原",confidence:"B",
+      pop:{clan:15800,slave:3600},grain:10600,fodder:3000,bronze:620,
+      weapons:{wood:1500,bow:290,ge:240,spear:170,chariot:2},
+      farm:88,forge:2,market:3,wall:1,roads:["hanzhong"]
     }
   ],
 
@@ -105,7 +201,11 @@ const GAME_DATA = {
     {id:"zhou_general",name:"周宗伯仲",faction:"zhou",role:"宗族将领",age:32,command:70,martial:71,admin:56,intrigue:51,diplomacy:58,ritual:66,prestige:54,trait:"族兵凝聚",alive:true,confidence:"C"},
     {id:"zhou_steward",name:"太史辛",faction:"zhou",role:"史臣",age:46,command:48,martial:37,admin:77,intrigue:63,diplomacy:69,ritual:76,prestige:50,trait:"善治仓廪",alive:true,confidence:"C"},
 
-    {id:"gaodi_lord",name:"高地君长",faction:"gaodi",role:"君长",age:38,command:76,martial:79,admin:57,intrigue:67,diplomacy:55,ritual:51,prestige:61,trait:"山地熟习",alive:true,confidence:"C"}
+    {id:"gaodi_lord",name:"高地君长",faction:"gaodi",role:"君长",age:38,command:76,martial:79,admin:57,intrigue:67,diplomacy:55,ritual:51,prestige:61,trait:"山地熟习",alive:true,confidence:"C"},
+    {id:"east_lord",name:"东方盟主",faction:"dongfang",role:"地方君长",age:40,command:71,martial:68,admin:64,intrigue:61,diplomacy:62,ritual:58,prestige:57,trait:"东土联结",alive:true,confidence:"C"},
+    {id:"jiang_lord",name:"江汉君长",faction:"jianghan",role:"地方君长",age:37,command:67,martial:66,admin:65,intrigue:57,diplomacy:64,ritual:61,prestige:52,trait:"舟陆并用",alive:true,confidence:"C"},
+    {id:"wu_lord",name:"南方君长",faction:"wucheng",role:"地方君长",age:42,command:65,martial:62,admin:70,intrigue:59,diplomacy:60,ritual:67,prestige:56,trait:"青铜工艺",alive:true,confidence:"C"},
+    {id:"shu_lord",name:"蜀地君长",faction:"shu",role:"地方君长",age:39,command:69,martial:65,admin:72,intrigue:66,diplomacy:58,ritual:78,prestige:68,trait:"古蜀礼器传统",alive:true,confidence:"C"}
   ],
 
   archive: [
