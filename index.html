@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>大邑商：四土</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">晚商战略原型 · Vertical Slice</div>
+        <h1>大邑商：四土</h1>
+      </div>
+      <div class="top-actions">
+        <button id="btn-new">新局</button>
+        <button id="btn-end-turn" class="primary">结束本季</button>
+      </div>
+    </header>
+
+    <section class="hud">
+      <div><span>势力</span><b id="hud-faction">—</b></div>
+      <div><span>年代</span><b id="hud-date">—</b></div>
+      <div><span>贝</span><b id="hud-shells">0</b></div>
+      <div><span>粮</span><b id="hud-grain">0 石</b></div>
+      <div><span>草料</span><b id="hud-fodder">0</b></div>
+      <div><span>族人</span><b id="hud-clansmen">0</b></div>
+      <div><span>奴隶</span><b id="hud-slaves">0</b></div>
+    </section>
+
+    <main class="layout">
+      <aside class="left-panel">
+        <div class="panel">
+          <h2>政权</h2>
+          <div id="faction-summary"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title-row">
+            <h2>人物</h2>
+            <button id="btn-archive" class="tiny">史实档案</button>
+          </div>
+          <div id="characters"></div>
+        </div>
+        <div class="panel">
+          <h2>礼制</h2>
+          <div class="button-stack">
+            <button id="btn-divine">占卜</button>
+            <button id="btn-sacrifice">祭祀</button>
+          </div>
+          <small>占卜给出不完全可靠的军事提示；祭祀消耗贝与牲畜，提高威望和短期士气。</small>
+        </div>
+      </aside>
+
+      <section class="map-panel">
+        <div class="map-toolbar">
+          <div>
+            <b>战略地图</b>
+            <span class="muted">点击聚落查看详情；选中我方军队后再点相邻聚落可行军。</span>
+          </div>
+          <div class="legend">
+            <span><i class="dot shang"></i>商</span>
+            <span><i class="dot zhou"></i>周</span>
+            <span><i class="dot gaodi"></i>高地方</span>
+            <span><i class="dot neutral"></i>中立/小方</span>
+          </div>
+        </div>
+        <div id="map" class="map"></div>
+        <div class="map-bottom">
+          <div class="panel compact">
+            <h2>军队</h2>
+            <div id="armies"></div>
+          </div>
+          <div class="panel compact">
+            <h2>季节事件</h2>
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="right-panel">
+        <div class="panel">
+          <h2 id="settlement-title">聚落详情</h2>
+          <div id="settlement-detail" class="muted">请选择一个聚落。</div>
+        </div>
+        <div class="panel">
+          <h2>征募与训练</h2>
+          <div class="recruit-grid">
+            <button data-unit="slave_levy">征发奴隶</button>
+            <button data-unit="clan_levy">征召族兵</button>
+            <button data-unit="archer">征募弓手</button>
+            <button data-unit="bronze_ge">训练青铜戈兵</button>
+            <button data-unit="bronze_spear">训练青铜矛兵</button>
+            <button data-unit="chariot">编练战车</button>
+          </div>
+          <div id="recruit-help" class="muted small"></div>
+        </div>
+        <div class="panel">
+          <h2>内政</h2>
+          <div class="button-stack">
+            <button id="btn-buy-grain">采买 300 石粮</button>
+            <button id="btn-free-slaves">赎释 100 奴隶为族人</button>
+            <button id="btn-workshop">扩建铸造作坊</button>
+            <button id="btn-trade-tech">延请外来工匠</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="dialog">
+    <div id="dialog-content"></div>
+    <form method="dialog"><button>关闭</button></form>
+  </dialog>
+
+  <script src="game.js"></script>
+</body>
+</html>
