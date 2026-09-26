@@ -656,7 +656,10 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
 
   addLog(winner.name+"在"+getSet(attacker.at).name+"取得战场优势；"+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
 
-  if(armyMen(loser)<45){
+  if(loser.temporaryGarrison){
+    addLog(loser.name+"守备体系瓦解，幸存者逃散、被俘或退回民间。","bad");
+    state.armies=state.armies.filter(function(x){return x.id!==loser.id;});
+  }else if(armyMen(loser)<45){
     addLog(loser.name+"已无法维持成建制军队，残部失散或被俘。","bad");
     state.armies=state.armies.filter(function(x){return x.id!==loser.id;});
   }else{
