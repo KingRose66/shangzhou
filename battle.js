@@ -107,14 +107,22 @@
         const def = GAME_DATA.units[u.type];
         const bw = u.type === "chariot" ? 54 : 42;
         const bh = u.type === "chariot" ? 25 : 30;
+        let traitMorale=0,traitOrder=0,traitMelee=1,traitMissile=1,traitSpeed=1;
+        if(commander){
+          if(commander.trait==="车战娴熟"&&u.type==="chariot"){traitMorale+=4;traitOrder+=5;traitMelee*=1.08;}
+          if(commander.trait==="族兵凝聚"&&u.type==="clan_levy"){traitMorale+=6;traitOrder+=6;traitMelee*=1.05;}
+          if(commander.trait==="山地熟习"&&["hill","highland"].includes(this.config.terrain)){traitMorale+=3;traitOrder+=5;traitSpeed*=1.06;}
+          if(commander.trait==="舟陆并用"&&this.config.terrain==="river"){traitMorale+=3;traitOrder+=4;traitSpeed*=1.05;}
+          if(commander.trait==="西土开拓"&&isAttacker){traitMorale+=2;traitOrder+=3;}
+        }
         const unit = {
           uid: `${side}-${idx}`, sourceIndex:idx, armyId:army.id, type:u.type,
           name:def.name, side, x:baseX + dir*(col*54), y:this.h*.25 + row*72,
           tx:null,ty:null,targetEnemy:null,
           men:u.men,maxMen:u.men,
-          morale:Math.min(95,(u.morale || def.morale) + (commander ? Math.round((commander.command-50)*.18) : 0)),
-          order:def.order, fatigue:4,
-          melee:def.melee, missile:def.missile, range:def.range||0, armor:def.armor, speed:def.speed,
+          morale:Math.min(95,(u.morale || def.morale) + (commander ? Math.round((commander.command-50)*.18) : 0)+traitMorale),
+          order:Math.min(95,def.order+traitOrder), fatigue:4,
+          melee:def.melee*traitMelee, missile:def.missile*traitMissile, range:def.range||0, armor:def.armor, speed:def.speed*traitSpeed,
           width:bw,height:bh, routed:false, engaged:false,
           attackCd:Math.random()*.8, missileCd:Math.random()*1.5,
           moving:false, lastMoveSpeed:0, facing:dir>0?0:Math.PI, isAttacker
