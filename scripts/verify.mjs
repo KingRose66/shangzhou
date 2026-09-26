@@ -15,6 +15,10 @@ const D = sandbox.window.GAME_DATA;
 if (!D || !D.settlements || !D.units) throw new Error("GAME_DATA missing");
 
 const settlements = new Map(D.settlements.map(s=>[s.id,s]));
+for (const factionId of Object.keys(D.factions).filter(id=>id!=="neutral")) {
+  if (!D.settlements.some(s=>s.owner===factionId&&s.capital)) throw new Error(`No capital for playable faction ${factionId}`);
+  if (!D.characters.some(c=>c.faction===factionId&&c.alive)) throw new Error(`No living character for playable faction ${factionId}`);
+}
 for (const s of D.settlements) {
   if (!D.factions[s.owner]) throw new Error(`Unknown owner ${s.owner} at ${s.id}`);
   for (const road of s.roads) {
