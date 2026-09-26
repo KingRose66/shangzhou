@@ -16,6 +16,11 @@ function faction(id){ return state.factions[id]; }
 function ownerName(id){ return faction(id) ? faction(id).name : id; }
 function pairKey(a,b){ return [a,b].sort().join("|"); }
 function isAtWar(a,b){ return !!state.wars[pairKey(a,b)]; }
+function isHostile(a,b){ return a!==b&&isAtWar(a,b); }
+function hasMilitaryAccess(a,b){
+  if(a===b)return true;
+  return state.tribute[b]===a||state.tribute[a]===b;
+}
 function relation(a,b){
   if(a===b)return 100;
   const fa=faction(a);
@@ -346,7 +351,7 @@ function routeLine(a,b,map,blocked,supply){
   map.appendChild(r);
 }
 function nodeBlocked(id,owner){
-  return state.armies.some(function(a){return a.owner!==owner&&a.at===id&&armyMen(a)>0;});
+  return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
 }
 function renderTerrainBackdrop(map){
   const wrap=document.createElement("div");
@@ -425,7 +430,7 @@ function renderMap(){
     const s=getSet(a.at);
     if(a.owner!==state.player&&intelLevel(s)<=0)return;
     const e=document.createElement("div");
-    e.className="army-token "+(a.owner===state.player?"":"enemy")+(state.selectedArmy===a.id?" selected":"");
+    e.className="army-token "+(a.owner===state.player?"":isHostile(state.player,a.owner)?"enemy":"foreign")+(state.selectedArmy===a.id?" selected":"");
     e.style.left=(s.x+2+(i%2)*2)+"%";e.style.top=(s.y-4-(i%3)*2)+"%";
     if(a.owner===state.player){
       e.textContent=faction(a.owner).short+"军 "+armyMen(a);
@@ -435,7 +440,7 @@ function renderMap(){
       const lvl=intelLevel(s);
       const shown=lvl>=3?fmt(armyMen(a)):lvl===2?"约"+fmt(roughNumber(armyMen(a),100)):"兵力不详";
       e.textContent=faction(a.owner).short+"军 "+shown;
-      e.title=lvl>=2?a.name+"｜估计兵力 "+shown:"发现敌军活动";
+      e.title=lvl>=2?a.name+"｜估计兵力 "+shown:(isHostile(state.player,a.owner)?"发现敌军活动":"发现外国军队活动");
       e.onclick=function(ev){ev.stopPropagation();state.selectedSettlement=s.id;render();};
     }
     map.appendChild(e);
@@ -807,6 +812,7 @@ function supplyPathFor(a){
   while(q.length){
     const cur=q.shift(),s=getSet(cur.id);
     const friendly=s&&s.owner===owner&&!nodeBlocked(cur.id,owner);
+    const accessible=s&&hasMilitaryAccess(owner,s.owner)&&!nodeBlocked(cur.id,owner);
 
     if(friendly){
       if(s.grain>=minimum||s.fodder>=120)return cur.path;
@@ -820,7 +826,7 @@ function supplyPathFor(a){
 
       // An army may reach its own network from a hostile current node,
       // but supply cannot be traced through a chain of unconquered enemy nodes.
-      if(n.owner!==owner)continue;
+      if(!hasMilitaryAccess(owner,n.owner))continue;
       visited.add(nid);
       q.push({id:nid,path:cur.path.concat([nid])});
     }
@@ -957,7 +963,7 @@ function moveArmy(a,targetId,after){
   if(!origin.roads.includes(targetId))return notice("只能沿相邻道路或通道行军。");
   const need=requiredLaborers(a);
   if(a.laborers<need)return notice(a.name+"民夫不足。当前 "+a.laborers+"，至少需要 "+need+" 人。");
-  if(dest.owner!==a.owner&&!isAtWar(a.owner,dest.owner)){
+  if(dest.owner!==a.owner&&!isAtWar(a.owner,dest.owner)&&!hasMilitaryAccess(a.owner,dest.owner)){
     declareWar(a.owner,dest.owner,true);
   }
   const cost=marchCost(a,dest);
@@ -968,13 +974,15 @@ function moveArmy(a,targetId,after){
   addLog(a.name+"由"+origin.name+"行军至"+dest.name+"，消耗军粮 "+Math.round(cost.grain)+" 石。");
   refreshAllSupply();
 
-  const enemies=state.armies.filter(function(x){return x.owner!==a.owner&&x.at===targetId&&armyMen(x)>0;});
+  const enemies=state.armies.filter(function(x){return isHostile(a.owner,x.owner)&&x.at===targetId&&armyMen(x)>0;});
   if(enemies.length){
     beginEncounter(a,enemies[0],origin.id,after);
   }else{
-    if(dest.owner!==a.owner){
+    if(dest.owner!==a.owner&&isAtWar(a.owner,dest.owner)){
       if(dest.wall>0)beginSiege(a,dest);
       else occupySettlement(a,dest);
+    }else if(dest.owner!==a.owner&&hasMilitaryAccess(a.owner,dest.owner)){
+      addLog(a.name+"经"+dest.name+"通行；当地仍由"+ownerName(dest.owner)+"自行统治。");
     }
     render();
     if(after)after();
@@ -1092,7 +1100,7 @@ function retreatPendingEncounter(){
 
   if(a===p.defender){
     const city=p.location;
-    if(city.owner!==p.attacker.owner){
+    if(city.owner!==p.attacker.owner&&isAtWar(p.attacker.owner,city.owner)){
       if(city.wall>0)beginSiege(p.attacker,city);
       else occupySettlement(p.attacker,city);
     }
@@ -1151,7 +1159,7 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
     loser.morale=Math.max(18,loser.morale-8);
   }
 
-  if(winner===attacker&&getSet(attacker.at).owner!==attacker.owner)occupySettlement(attacker,getSet(attacker.at));
+  if(winner===attacker&&getSet(attacker.at).owner!==attacker.owner&&isAtWar(attacker.owner,getSet(attacker.at).owner))occupySettlement(attacker,getSet(attacker.at));
   if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
 
   turnBusy=false;
@@ -1180,7 +1188,7 @@ function autoResolve(attacker,defender,attackerFrom){
   }else{
     const ret=findRetreatNode(loser,winner.at);if(ret)loser.at=ret.id;
   }
-  if(winner===attacker&&s.owner!==attacker.owner)occupySettlement(attacker,s);
+  if(winner===attacker&&s.owner!==attacker.owner&&isAtWar(attacker.owner,s.owner))occupySettlement(attacker,s);
   if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
 }
 function damageArmy(a,pct){
@@ -1389,7 +1397,7 @@ function runAiActions(actions,index,done){
   if(!a){runAiActions(actions,index+1,done);return;}
   const origin=a.at,dest=getSet(act.targetId),cost=marchCost(a,dest);
   a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);a.previous=origin;a.at=dest.id;
-  const defender=state.armies.find(function(x){return x.owner!==a.owner&&x.at===dest.id&&armyMen(x)>0;});
+  const defender=state.armies.find(function(x){return isHostile(a.owner,x.owner)&&x.at===dest.id&&armyMen(x)>0;});
   if(defender){
     if(defender.owner===state.player){
       beginEncounter(a,defender,origin,function(){runAiActions(actions,index+1,done);});
@@ -1398,7 +1406,7 @@ function runAiActions(actions,index,done){
       runAiActions(actions,index+1,done);
     }
   }else{
-    if(dest.owner!==a.owner){
+    if(dest.owner!==a.owner&&isAtWar(a.owner,dest.owner)){
       if(dest.wall>0)beginSiege(a,dest);
       else occupySettlement(a,dest);
     }
