@@ -767,6 +767,16 @@ function beginSiege(a,city){
   state.sieges[city.id]={attackerArmyId:a.id,owner:a.owner,turns:0};
   addLog(a.name+"开始围困"+city.name+"。若持续封锁，其粮储与守备会逐季恶化。","warning");
 }
+function estimateCityGarrisonPower(city){
+  const pop=city.pop.clan+city.pop.slave;
+  const men=Math.min(city.pop.clan,Math.max(160,Math.round(pop*.045)));
+  const armed=Math.min(men,city.weapons.ge+city.weapons.spear+city.weapons.bow+Math.floor(city.weapons.wood*.8));
+  const bronze=Math.min(1,(city.weapons.ge+city.weapons.spear)/Math.max(1,men));
+  const missile=Math.min(1,city.weapons.bow/Math.max(1,men));
+  const quality=.42+bronze*.55+missile*.24+(armed/Math.max(1,men))*.18;
+  const fort=1+city.wall*.16+(hasTech(city.owner,"fortification")?.15:0);
+  return men*quality*fort;
+}
 function processSieges(){
   Object.keys(state.sieges).forEach(function(cityId){
     const siege=state.sieges[cityId],city=getSet(cityId),army=getArmy(siege.attackerArmyId);
@@ -784,6 +794,24 @@ function processSieges(){
         addLog(city.name+"粮尽，守者开门屈服。","good");
         occupySettlement(army,city);
         delete state.sieges[cityId];
+        return;
+      }
+    }
+
+    // AI may assault other AI polities after establishing a siege, but never resolves a player's city assault invisibly.
+    if(army.owner!==state.player&&city.owner!==state.player&&siege.turns>=2&&army.morale>=50){
+      const laborNeed=requiredLaborers(army)+40;
+      const advantage=armyPower(army,city,true)/Math.max(1,estimateCityGarrisonPower(city));
+      const willingness=Math.min(.55,.12+(siege.turns-2)*.08+Math.max(0,advantage-1.15)*.25);
+      if(army.laborers>=laborNeed&&army.grain>=80&&advantage>=1.18&&Math.random()<willingness){
+        const garrison=createSiegeGarrison(city);
+        if(!garrison.units.length||armyMen(garrison)<=0){
+          occupySettlement(army,city);
+        }else{
+          addLog(ownerName(army.owner)+"对"+city.name+"发动强攻。");
+          autoResolve(army,garrison,army.previous||city.id);
+        }
+        if(city.owner===army.owner||!getArmy(army.id)||army.at!==city.id)delete state.sieges[cityId];
       }
     }
   });
