@@ -117,7 +117,7 @@
           melee:def.melee, missile:def.missile, range:def.range||0, armor:def.armor, speed:def.speed,
           width:bw,height:bh, routed:false, engaged:false,
           attackCd:Math.random()*.8, missileCd:Math.random()*1.5,
-          moving:false, lastMoveSpeed:0, isAttacker
+          moving:false, lastMoveSpeed:0, facing:dir>0?0:Math.PI, isAttacker
         };
         this.units.push(unit);
         row++;
@@ -279,6 +279,7 @@
       let speed=u.speed*this.terrainFactor(u)*(1-u.fatigue*.0042);
       if(flee)speed*=1.15;
       u.x+=dx/d*speed*dt;u.y+=dy/d*speed*dt;
+      u.facing=Math.atan2(dy,dx);
       u.moving=true;u.lastMoveSpeed=speed;
       u.x=Math.max(-100,Math.min(this.w+100,u.x));u.y=Math.max(20,Math.min(this.h-20,u.y));
       if(u.type==="chariot" && this.terrainAt(u)==="forest")u.order=Math.max(15,u.order-dt*2.4);
@@ -294,19 +295,43 @@
       d.order=Math.max(0,d.order-loss*.18);
     }
 
+    attackDirection(a,d){
+      const incoming=Math.atan2(a.y-d.y,a.x-d.x);
+      let diff=Math.abs(incoming-d.facing);
+      while(diff>Math.PI)diff=Math.abs(diff-Math.PI*2);
+      if(diff>2.18)return "rear";
+      if(diff>1.05)return "flank";
+      return "front";
+    }
+
     meleeAttack(a,d){
       const fatigue=1-a.fatigue*.0065;
       const order=.45+a.order/130;
+      const direction=this.attackDirection(a,d);
+      const dirDamage=direction==="rear"?1.30:direction==="flank"?1.15:1;
+      const dirMorale=direction==="rear"?7:direction==="flank"?3:0;
+      const dirOrder=direction==="rear"?6:direction==="flank"?3:0;
       let charge=1;
-      if(a.type==="chariot" && a.lastMoveSpeed>45 && !["forest","mud","hill"].includes(this.terrainAt(a))){
-        charge=d.type==="bronze_spear"?1.12:1.65;
-        d.morale-=5;
+
+      const goodChariotGround=!["forest","mud","hill","rampart","ditch"].includes(this.terrainAt(a));
+      if(a.type==="chariot" && a.lastMoveSpeed>45 && goodChariotGround){
+        if(d.type==="bronze_spear" && direction==="front"){
+          charge=.92;
+          const counterLoss=Math.max(0,Math.round((d.men/d.maxMen)*1.3));
+          a.men=Math.max(1,a.men-counterLoss);
+          a.order=Math.max(8,a.order-4);
+          a.morale-=2;
+        }else{
+          charge=direction==="rear"?1.72:direction==="flank"?1.62:1.48;
+          d.morale-=direction==="front"?4:6;
+        }
       }
-      const raw=(a.melee/12)*(a.men/a.maxMen)*fatigue*order*charge*(.72+Math.random()*.55);
+
+      const raw=(a.melee/12)*(a.men/a.maxMen)*fatigue*order*charge*dirDamage*(.72+Math.random()*.55);
       const loss=Math.max(1,Math.round(raw*(1-d.armor/145)));
       d.men=Math.max(0,d.men-loss);
-      d.order=Math.max(0,d.order-loss*.55-1.1);
-      d.morale-=loss*.62 + Math.max(0,(a.morale-d.morale)*.012);
+      d.order=Math.max(0,d.order-loss*.55-1.1-dirOrder);
+      d.morale-=loss*.62 + dirMorale + Math.max(0,(a.morale-d.morale)*.012);
       a.order=Math.max(10,a.order-.18);
       if(d.men<=0){d.routed=true;d.morale=0}
     }
@@ -411,6 +436,10 @@
         c.fillStyle="rgba(25,18,12,.85)";c.font="10px sans-serif";c.textAlign="center";
         c.fillText(GAME_DATA.units[u.type].short,u.type==="chariot"?0:0,u.height/2+14);
         c.textAlign="start";
+        if(!u.routed){
+          c.strokeStyle="rgba(255,239,190,.7)";c.lineWidth=1.2;
+          c.beginPath();c.moveTo(0,0);c.lineTo(Math.cos(u.facing)*18,Math.sin(u.facing)*18);c.stroke();
+        }
         if(u.routed){c.fillStyle="#2b1d17";c.font="bold 13px sans-serif";c.fillText("溃", -5,4)}
         c.restore();
 
