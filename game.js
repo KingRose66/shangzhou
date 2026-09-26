@@ -6,6 +6,7 @@ const terrainNames = {plain:"平原",hill:"丘陵",rolling:"缓丘",river:"河�
 
 let state = null;
 let turnBusy = false;
+let pendingEncounter = null;
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -891,23 +892,102 @@ function occupySettlement(a,city){
   checkVictory();
 }
 
+function encounterArmyHtml(a,side){
+  const cmd=getChar(a.commander);
+  const composition=a.units.map(function(u){return DATA.units[u.type].short+" "+fmt(u.men);}).join(" · ");
+  return '<div class="encounter-force '+side+'">'+
+    '<h3>'+a.name+'</h3>'+
+    '<div class="stats">'+
+      '<span>兵力</span><b>'+fmt(armyMen(a))+'</b>'+
+      '<span>主将</span><b>'+(cmd?cmd.name:"未任命")+'</b>'+
+      '<span>士气</span><b>'+Math.round(a.morale)+'</b>'+
+      '<span>粮道</span><b>'+a.supplyState+'</b>'+
+    '</div>'+
+    '<p class="small muted">'+composition+'</p>'+
+  '</div>';
+}
+function retreatNodeStrict(army,avoid){
+  const s=getSet(army.at);
+  if(!s)return null;
+  return s.roads.map(getSet).find(function(n){
+    return n&&n.id!==avoid&&n.owner===army.owner&&!nodeBlocked(n.id,army.owner);
+  })||null;
+}
 function beginEncounter(attacker,defender,attackerFrom,after){
   const playerArmy=attacker.owner===state.player?attacker:defender;
   const enemyArmy=playerArmy===attacker?defender:attacker;
   const location=getSet(attacker.at);
   const pc=getChar(playerArmy.commander),ec=getChar(enemyArmy.commander);
-  turnBusy=true;
-
   const siegeMode=!!(defender.temporaryGarrison&&state.sieges[location.id]);
+  turnBusy=true;
+  pendingEncounter={attacker:attacker,defender:defender,playerArmy:playerArmy,enemyArmy:enemyArmy,
+    attackerFrom:attackerFrom,after:after,location:location,pc:pc,ec:ec,siegeMode:siegeMode};
+
+  const playerIsAttacker=playerArmy===attacker;
+  const retreatNode=playerIsAttacker?getSet(attackerFrom):retreatNodeStrict(playerArmy,attacker.at);
+  pendingEncounter.retreatNode=retreatNode;
+
+  $("#encounter-title").textContent=(siegeMode?"强攻 ":"遭遇 ")+location.name;
+  $("#encounter-summary").innerHTML=
+    '<div class="encounter-grid">'+encounterArmyHtml(playerArmy,"player")+
+    '<div class="encounter-vs">VS</div>'+encounterArmyHtml(enemyArmy,"enemy")+'</div>'+
+    '<div class="encounter-terrain"><b>战场：</b>'+(siegeMode?"土垣与壕沟":terrainNames[location.terrain])+
+    '　·　<b>我方：</b>'+(playerIsAttacker?"进攻":"防守")+
+    '　·　<b>地形判断：</b>'+(location.terrain==="plain"?"开阔地利于战车机动":location.terrain==="highland"||location.terrain==="hill"?"山地会显著限制战车":"需要留意道路、河谷与队形")+
+    '</div>';
+  $("#encounter-retreat").disabled=!retreatNode;
+  $("#encounter-retreat").textContent=retreatNode?"撤退至 "+retreatNode.name:"无路可退";
+  $("#encounter-overlay").classList.add("show");
+}
+function commandPendingEncounter(){
+  const p=pendingEncounter;
+  if(!p)return;
+  $("#encounter-overlay").classList.remove("show");
+  pendingEncounter=null;
   BATTLE_ENGINE.start({
-    attacker:attacker,defender:defender,playerArmy:playerArmy,enemyArmy:enemyArmy,
-    terrain:location.terrain,terrainName:siegeMode?"土垣聚落强攻":terrainNames[location.terrain],locationName:location.name,
-    siege:siegeMode,
-    commanders:{[playerArmy.id]:pc,[enemyArmy.id]:ec},
+    attacker:p.attacker,defender:p.defender,playerArmy:p.playerArmy,enemyArmy:p.enemyArmy,
+    terrain:p.location.terrain,terrainName:p.siegeMode?"土垣聚落强攻":terrainNames[p.location.terrain],locationName:p.location.name,
+    siege:p.siegeMode,
+    commanders:{[p.playerArmy.id]:p.pc,[p.enemyArmy.id]:p.ec},
     onFinish:function(result){
-      resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,attackerFrom,after);
+      resolveTacticalResult(result,p.attacker,p.defender,p.playerArmy,p.enemyArmy,p.attackerFrom,p.after);
     }
   });
+}
+function autoPendingEncounter(){
+  const p=pendingEncounter;
+  if(!p)return;
+  $("#encounter-overlay").classList.remove("show");
+  pendingEncounter=null;
+  autoResolve(p.attacker,p.defender,p.attackerFrom);
+  turnBusy=false;
+  refreshAllSupply();
+  checkVictory();
+  render();
+  if(p.after)p.after();
+}
+function retreatPendingEncounter(){
+  const p=pendingEncounter;
+  if(!p||!p.retreatNode)return;
+  $("#encounter-overlay").classList.remove("show");
+  pendingEncounter=null;
+  const a=p.playerArmy;
+  damageArmy(a,.025);
+  a.morale=Math.max(20,a.morale-5);
+  a.at=p.retreatNode.id;a.previous=p.retreatNode.id;
+  addLog(a.name+"主动脱离接触，退往"+p.retreatNode.name+"；撤退中有少量失散。","warning");
+
+  if(a===p.defender){
+    const city=p.location;
+    if(city.owner!==p.attacker.owner){
+      if(city.wall>0)beginSiege(p.attacker,city);
+      else occupySettlement(p.attacker,city);
+    }
+  }
+  turnBusy=false;
+  refreshAllSupply();
+  render();
+  if(p.after)p.after();
 }
 function syncFromBattle(a,pack){
   pack.forEach(function(p){
@@ -980,12 +1060,15 @@ function autoResolve(attacker,defender,attackerFrom){
   pursuitLoss(loser,winner);
   winner.morale=Math.min(88,winner.morale+4);loser.morale=Math.max(18,loser.morale-16);
   addLog(winner.name+"击溃"+loser.name+"。","warning");
-  if(armyMen(loser)<45)state.armies=state.armies.filter(function(x){return x.id!==loser.id;});
-  else{
+  if(loser.temporaryGarrison){
+    state.armies=state.armies.filter(function(x){return x.id!==loser.id;});
+  }else if(armyMen(loser)<45){
+    state.armies=state.armies.filter(function(x){return x.id!==loser.id;});
+  }else{
     const ret=findRetreatNode(loser,winner.at);if(ret)loser.at=ret.id;
   }
   if(winner===attacker&&s.owner!==attacker.owner)occupySettlement(attacker,s);
-  if(loser===attacker&&getArmy(attacker.id))attacker.at=attackerFrom;
+  if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
 }
 function damageArmy(a,pct){
   a.units.forEach(function(u){u.men=Math.max(0,Math.round(u.men*(1-pct)));});
@@ -1537,6 +1620,7 @@ function archive(){
   notice(html,"历代史实人物档案");
 }
 function saveGame(){
+  if(pendingEncounter)return notice("请先处理当前两军接触，再保存战局。");
   try{
     localStorage.setItem("shangzhou-save",JSON.stringify(state));
     addLog("战局已保存到本机浏览器。","good");render();
@@ -1601,6 +1685,9 @@ $("#btn-foreign-grain").onclick=foreignGrainTrade;
 $("#btn-demand-tribute").onclick=demandTribute;
 $("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-peace").onclick=offerPeace;
+$("#encounter-command").onclick=commandPendingEncounter;
+$("#encounter-auto").onclick=autoPendingEncounter;
+$("#encounter-retreat").onclick=retreatPendingEncounter;
 $("#btn-march").onclick=marchSelectedArmy;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
@@ -1613,7 +1700,9 @@ window.SHANGZHOU_DEBUG={
   getState:function(){return deepCopy(state);},
   startGame:startGame,
   endTurn:endTurn,
-  intelLevel:function(id){return intelLevel(getSet(id));}
+  intelLevel:function(id){return intelLevel(getSet(id));},
+  hasPendingEncounter:function(){return !!pendingEncounter;},
+  autoPendingEncounter:autoPendingEncounter
 };
 
 state=freshState("shang");
