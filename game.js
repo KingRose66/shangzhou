@@ -141,6 +141,27 @@ function commanderBonus(a){
   const c=getChar(a.commander);
   return c ? 0.82+c.command/250 : 1;
 }
+function traitEffectText(c){
+  if(!c)return "";
+  const effects={
+    "车战娴熟":"统领战车时战斗效率提高",
+    "族兵凝聚":"统领族兵时士气与战斗效率提高",
+    "西土开拓":"统军行军耗粮降低，进攻组织略有优势",
+    "山地熟习":"丘陵与高地作战惩罚显著降低",
+    "东土联结":"对服属与地方关系的外交更有优势",
+    "舟陆并用":"河谷与渡口作战组织更好",
+    "青铜工艺":"主政城邑时提高青铜作坊产出",
+    "古蜀礼器传统":"祭祀与礼制威望收益更高",
+    "善治仓廪":"主政城邑时提高秋收并改善经济",
+    "谨慎占断":"参与王室事务时占卜可靠性略提高",
+    "守成威权":"维持既有服属网络时威望损耗较低"
+  };
+  return effects[c.trait]||"人物特质将影响其最擅长的职责";
+}
+function factionRulerCharacter(owner){
+  const f=faction(owner);
+  return state.characters.find(function(c){return c.faction===owner&&c.name===f.ruler&&c.alive;})||null;
+}
 function terrainBattleFactor(army,settlement,attacking){
   const t=settlement.terrain;
   let f=1;
@@ -150,16 +171,23 @@ function terrainBattleFactor(army,settlement,attacking){
   if(t==="river"&&attacking) f*=.88;
   if(t==="plain") f+=share*.24;
   if(hasTech(army.owner,"hill_march")&&(t==="highland"||t==="hill"))f+=.08;
+  const commander=getChar(army.commander);
+  if(commander&&commander.trait==="山地熟习"&&(t==="highland"||t==="hill"))f+=.12;
+  if(commander&&commander.trait==="舟陆并用"&&t==="river")f+=.10;
+  if(commander&&commander.trait==="西土开拓"&&attacking)f+=.05;
   return Math.max(.55,f);
 }
-function unitPower(u){
+function unitPower(u,commander){
   const d=DATA.units[u.type];
   const quality=(d.melee+d.missile*.82+d.armor*.35+d.morale*.25)/65;
-  return u.men*quality;
+  let trait=1;
+  if(commander&&commander.trait==="车战娴熟"&&u.type==="chariot")trait*=1.12;
+  if(commander&&commander.trait==="族兵凝聚"&&u.type==="clan_levy")trait*=1.10;
+  return u.men*quality*trait;
 }
 function armyPower(a,at,attacking){
-  const s=at||getSet(a.at);
-  let p=a.units.reduce(function(n,u){return n+unitPower(u);},0);
+  const s=at||getSet(a.at),commander=getChar(a.commander);
+  let p=a.units.reduce(function(n,u){return n+unitPower(u,commander);},0);
   const supply=a.supplyState==="畅通"?1:a.supplyState==="危险"?.88:.68;
   return p*(a.morale/65)*commanderBonus(a)*supply*terrainBattleFactor(a,s,!!attacking);
 }
@@ -252,6 +280,17 @@ function render(){
   renderLog();
 }
 
+function campaignObjectiveHtml(){
+  const f=faction(state.player),own=ownedSettlements().length;
+  const subjects=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
+  if(state.player==="shang"){
+    return '<b>霸权目标</b>：贡纳势力 '+subjects+'/3 · 威望 '+f.prestige+'/110；或控制周原且拥有 '+own+'/8 个聚落。';
+  }
+  if(state.player==="zhou"){
+    return '<b>兴周目标</b>：控制大邑商·殷 '+(getSet("yin").owner===state.player?"✓":"✗")+' · 聚落 '+own+'/8。';
+  }
+  return '<b>区域霸权</b>：聚落 '+own+'/7 · 威望 '+f.prestige+'/90 · 臣属 '+subjects+'/1；或直接夺取大邑商·殷。';
+}
 function renderFaction(){
   const f=faction(state.player),t=totals();
   const techs=f.tech.map(function(id){
@@ -266,6 +305,7 @@ function renderFaction(){
       '<span>青铜储备</span><b>'+fmt(t.bronze)+'</b>'+
     '</div>'+
     '<p class="small">人口：族人 '+fmt(t.clan)+' · 奴隶 '+fmt(t.slave)+'</p>'+
+    '<p class="small">'+campaignObjectiveHtml()+'</p>'+
     '<p class="small muted">技艺：'+(techs||"无")+'</p>';
 }
 
@@ -276,7 +316,7 @@ function renderCharacters(){
     return '<div class="char-card">'+
       '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+'</span>'+
       '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+'</div>'+
-      '<div class="small">'+c.trait+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
+      '<div class="small"><b>'+c.trait+'</b>：'+traitEffectText(c)+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
     '</div>';
   }).join("");
 }
@@ -413,6 +453,7 @@ function forecastHarvest(s){
   let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
   const gov=getChar(state.governors[s.id]);
   if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
+  if(gov&&gov.trait==="善治仓廪")crop*=1.08;
   if(hasTech(s.owner,"wei_farming"))crop*=1.08;
   return Math.max(0,Math.round(crop));
 }
@@ -759,7 +800,9 @@ function refreshAllSupply(){
 function marchCost(a,dest){
   const men=armyMen(a),rough=["hill","highland"].includes(dest.terrain)?1.22:dest.terrain==="river"?1.12:1;
   const tech=hasTech(a.owner,"long_supply")?.88:1;
-  const grain=Math.max(18,men*.04*rough*tech);
+  const commander=getChar(a.commander);
+  const commandMarch=commander&&commander.trait==="西土开拓"?.90:commander&&commander.trait==="舟陆并用"&&dest.terrain==="river"?.92:1;
+  const grain=Math.max(18,men*.04*rough*tech*commandMarch);
   const fodder=chariotCount(a)*8*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
   return {grain:grain,fodder:fodder};
 }
@@ -1128,7 +1171,8 @@ function settlementEconomy(){
 
     const owner=faction(s.owner);
     const gov=getChar(state.governors[s.id]);
-    const govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
+    let govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
+    if(gov&&gov.trait==="善治仓廪")govEco*=1.08;
     owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco);
 
     const woodGain=Math.round(pop*.0025*(hasTech(s.owner,"local_craft")?1.10:1));
@@ -1136,7 +1180,8 @@ function settlementEconomy(){
     s.weapons.bow+=Math.round(pop*.00022);
 
     if(s.forge>0&&s.bronze>5){
-      const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1);
+      const craftGov=getChar(state.governors[s.id]);
+      const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1)*(craftGov&&craftGov.trait==="青铜工艺"?1.15:1);
       const use=Math.min(s.bronze,Math.round(s.forge*12));
       s.bronze-=use;
       s.weapons.ge+=Math.round(use*.52*mult);
@@ -1446,7 +1491,8 @@ function divine(){
     else if(enemies.length)truth="兆吉：整军持粮，可与邻敌争胜。";
     else truth="兆平：近境无大敌，可整顿内政。";
   }
-  const reliable=hasTech(state.player,"royal_divination")||Math.random()>.28;
+  const cautious=state.characters.some(function(c){return c.faction===state.player&&c.alive&&c.trait==="谨慎占断";});
+  const reliable=hasTech(state.player,"royal_divination")||Math.random()>(cautious?.18:.28);
   const falseOmens=["兆吉：宜速进。","兆不明：可战可守。","兆忧：道路或有阻。"];
   state.omen=reliable?truth:falseOmens[Math.floor(Math.random()*falseOmens.length)];
   state.omenTurn=state.turn;
@@ -1457,7 +1503,9 @@ function divine(){
 function sacrifice(){
   const f=faction(state.player);
   if(f.shells<80||f.livestock<12)return notice("祭祀需要 80 贝与 12 头牲畜。");
-  f.shells-=80;f.livestock-=12;f.prestige+=hasTech(state.player,"royal_divination")?4:3;
+  f.shells-=80;f.livestock-=12;
+  const ruler=factionRulerCharacter(state.player);
+  f.prestige+=(hasTech(state.player,"royal_divination")?4:3)+(ruler&&ruler.trait==="古蜀礼器传统"?1:0);
   state.armies.filter(function(a){return a.owner===state.player;}).forEach(function(a){a.morale=Math.min(90,a.morale+4);});
   addLog("举行祭祀，王权威望提高，诸军军心略振。","good");
   render();
@@ -1556,7 +1604,9 @@ function demandTribute(){
   const pDiff=faction(state.player).prestige-faction(other).prestige;
   const military=state.armies.filter(function(a){return a.owner===state.player;}).reduce(function(n,a){return n+armyPower(a);},0)/
     Math.max(1,state.armies.filter(function(a){return a.owner===other;}).reduce(function(n,a){return n+armyPower(a);},0));
-  const score=rel*.6+pDiff*.9+(military-1)*22+Math.random()*24;
+  const diplomat=factionRulerCharacter(state.player);
+  const traitBonus=diplomat&&diplomat.trait==="东土联结"?8:0;
+  const score=rel*.6+pDiff*.9+(military-1)*22+traitBonus+Math.random()*24;
   if(score>=38){
     state.tribute[other]=state.player;changeRelation(state.player,other,8);
     faction(state.player).prestige+=3;
