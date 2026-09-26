@@ -27,6 +27,65 @@ function setRelation(a,b,v){
   faction(b).relations[a]=v;
 }
 function changeRelation(a,b,d){ setRelation(a,b,relation(a,b)+d); }
+function baseIntelLevel(s){
+  if(!s)return 0;
+  if(s.owner===state.player)return 3;
+  if(state.armies.some(function(a){return a.owner===state.player&&a.at===s.id;}))return 3;
+  let level=0;
+  if(state.tribute[s.owner]===state.player||state.tribute[state.player]===s.owner)level=Math.max(level,2);
+  if(relation(state.player,s.owner)>=30)level=Math.max(level,1);
+  const adjacentOwned=state.settlements.some(function(o){return o.owner===state.player&&o.roads.includes(s.id);});
+  const adjacentArmy=state.armies.some(function(a){
+    return a.owner===state.player&&getSet(a.at)&&getSet(a.at).roads.includes(s.id);
+  });
+  if(adjacentOwned||adjacentArmy)level=Math.max(level,1);
+  return level;
+}
+function intelLevel(s){
+  let level=baseIntelLevel(s);
+  const rec=state.intel&&state.intel[s.id];
+  if(rec&&rec.expires>=state.tick)level=Math.max(level,rec.level||0);
+  return Math.min(3,level);
+}
+function setIntel(id,level,duration){
+  state.intel=state.intel||{};
+  state.intel[id]={level:Math.max(level,state.intel[id]?.level||0),expires:state.tick+(duration||4)};
+}
+function populationBand(pop){
+  if(pop<4000)return "小型聚落";
+  if(pop<9000)return "中型聚落";
+  if(pop<18000)return "大型聚落";
+  return "区域中心";
+}
+function roughNumber(n,step){
+  step=step||100;
+  return Math.max(step,Math.round(n/step)*step);
+}
+function grainBand(s){
+  const pop=s.pop.clan+s.pop.slave;
+  const quarters=s.grain/Math.max(1,pop*.012);
+  if(quarters<1.5)return "粮储紧张";
+  if(quarters<3)return "粮储一般";
+  if(quarters<5)return "粮储较足";
+  return "粮储充裕";
+}
+function enemyArmyLabelAt(s){
+  const armies=state.armies.filter(function(a){return a.owner!==state.player&&a.at===s.id&&armyMen(a)>0;});
+  if(!armies.length)return "未发现成建制军队";
+  const men=armies.reduce(function(n,a){return n+armyMen(a);},0);
+  const lvl=intelLevel(s);
+  if(lvl<=0)return "军势不明";
+  if(lvl===1)return men<300?"似有数百以下兵力":men<900?"似有数百兵力":"似有上千兵力";
+  if(lvl===2)return "约 "+fmt(roughNumber(men,100))+" 人";
+  return fmt(men)+" 人";
+}
+function canScoutSettlement(s){
+  if(!s||s.owner===state.player)return false;
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player)return false;
+  const at=getSet(a.at);
+  return !!at&&(a.at===s.id||at.roads.includes(s.id));
+}
 function declareWar(a,b,logIt){
   if(a===b||isAtWar(a,b))return;
   const key=pairKey(a,b);
@@ -149,6 +208,8 @@ function freshState(player){
     tribute:{},
     sieges:{},
     governors:{yin:"shang_steward",zhouyuan:"zhou_steward"},
+    intel:{},
+    tick:0,
     selectedSettlement:(DATA.settlements.find(function(s){return s.owner===player&&s.capital;})||DATA.settlements.find(function(s){return s.owner===player;})).id,
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
@@ -296,12 +357,22 @@ function renderMap(){
 
   state.armies.forEach(function(a,i){
     if(armyMen(a)<=0)return;
-    const s=getSet(a.at),e=document.createElement("div");
+    const s=getSet(a.at);
+    if(a.owner!==state.player&&intelLevel(s)<=0)return;
+    const e=document.createElement("div");
     e.className="army-token "+(a.owner===state.player?"":"enemy")+(state.selectedArmy===a.id?" selected":"");
     e.style.left=(s.x+2+(i%2)*2)+"%";e.style.top=(s.y-4-(i%3)*2)+"%";
-    e.textContent=faction(a.owner).short+"军 "+armyMen(a);
-    e.title=a.name+"｜粮道 "+a.supplyState;
-    e.onclick=function(ev){ev.stopPropagation();selectArmy(a.id);};
+    if(a.owner===state.player){
+      e.textContent=faction(a.owner).short+"军 "+armyMen(a);
+      e.title=a.name+"｜粮道 "+a.supplyState;
+      e.onclick=function(ev){ev.stopPropagation();selectArmy(a.id);};
+    }else{
+      const lvl=intelLevel(s);
+      const shown=lvl>=3?fmt(armyMen(a)):lvl===2?"约"+fmt(roughNumber(armyMen(a),100)):"兵力不详";
+      e.textContent=faction(a.owner).short+"军 "+shown;
+      e.title=lvl>=2?a.name+"｜估计兵力 "+shown:"发现敌军活动";
+      e.onclick=function(ev){ev.stopPropagation();state.selectedSettlement=s.id;render();};
+    }
     map.appendChild(e);
   });
 }
@@ -339,12 +410,53 @@ function renderSettlement(){
   if(!s){$("#settlement-detail").innerHTML='<span class="muted">请选择一个聚落。</span>';return;}
   $("#settlement-title").textContent=s.name;
   const friendly=s.owner===state.player;
+  const level=intelLevel(s);
+
+  if(!friendly){
+    const pop=s.pop.clan+s.pop.slave;
+    let html='<div class="stats">'+
+      '<span>控制</span><b>'+ownerName(s.owner)+'</b>'+
+      '<span>地形</span><b>'+terrainNames[s.terrain]+'</b>'+
+      '<span>情报</span><b>'+["未知","粗略","较详","确切"][level]+'</b>';
+
+    if(level===0){
+      html+='<span>规模</span><b>未知</b>'+
+        '<span>守备</span><b>未知</b></div>'+
+        '<p class="small muted">只有地理位置和大致政治归属可知。靠近、贸易、服属或派斥候可以提高情报。</p>';
+    }else if(level===1){
+      html+='<span>规模</span><b>'+populationBand(pop)+'</b>'+
+        '<span>防御</span><b>'+(s.wall>0?"似有土垣/壕沟":"未见明显坚固城防")+'</b>'+
+        '<span>军势</span><b>'+enemyArmyLabelAt(s)+'</b></div>'+
+        '<p class="small muted">这是边境接触、使者或远望所得的粗略信息，不显示精确粮仓与装备。</p>';
+    }else if(level===2){
+      html+='<span>人口</span><b>约 '+fmt(roughNumber(pop,500))+'</b>'+
+        '<span>粮情</span><b>'+grainBand(s)+'</b>'+
+        '<span>铸造</span><b>'+ (s.forge>0?"有作坊":"未见明显作坊") +'</b>'+
+        '<span>交换</span><b>'+ (s.market>=2?"较活跃":"一般") +'</b>'+
+        '<span>军势</span><b>'+enemyArmyLabelAt(s)+'</b></div>'+
+        '<p class="small muted">贸易、臣属关系或较长期接触得到的较详细估计，仍可能存在误差。</p>';
+    }else{
+      const foodTurns=s.grain/Math.max(1,pop*.012);
+      html+='<span>族人</span><b>'+fmt(s.pop.clan)+'</b>'+
+        '<span>奴隶</span><b>'+fmt(s.pop.slave)+'</b>'+
+        '<span>粮仓</span><b>'+fmt(s.grain)+' 石</b>'+
+        '<span>草料</span><b>'+fmt(s.fodder)+'</b>'+
+        '<span>青铜料</span><b>'+fmt(s.bronze)+'</b>'+
+        '<span>军势</span><b>'+enemyArmyLabelAt(s)+'</b></div>'+
+        '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
+        '<p class="small">按当前观察，粮储约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度基础口粮。</p>';
+    }
+    html+='<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
+    $("#settlement-detail").innerHTML=html;
+    return;
+  }
+
   const pop=s.pop.clan+s.pop.slave;
   const foodTurns=s.grain/Math.max(1,pop*.012);
-  const governor=s.owner===state.player?getChar(state.governors[s.id]):null;
-  const govOptions=s.owner===state.player?'<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&c.alive;}).map(function(c){
+  const governor=getChar(state.governors[s.id]);
+  const govOptions='<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&c.alive;}).map(function(c){
     return '<option value="'+c.id+'" '+(state.governors[s.id]===c.id?"selected":"")+'>'+c.name+'（治政 '+c.admin+'）</option>';
-  }).join(""):"";
+  }).join("");
   $("#settlement-detail").innerHTML=
     '<div class="stats">'+
       '<span>控制</span><b>'+ownerName(s.owner)+'</b>'+
@@ -360,12 +472,10 @@ function renderSettlement(){
     '</div>'+
     '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
     '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮；按当前征发状态，预计秋收约 <b>'+fmt(forecastHarvest(s))+' 石</b>。</p>'+
-    '<p class="small '+(friendly?"good":"warning")+'">'+(friendly?"可在此征募、采买、训练并征调民夫。":"非我方聚落；军事占领或政治服属后方可直接调用资源。")+'</p>'+
-    (friendly?'<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>':'')+
+    '<p class="small good">可在此征募、采买、训练并征调民夫。</p>'+
+    '<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>'+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
-  if(friendly){
-    $("#governor-select").onchange=function(){assignGovernor(s.id,this.value);};
-  }
+  $("#governor-select").onchange=function(){assignGovernor(s.id,this.value);};
 }
 
 function renderDiplomacy(){
@@ -376,18 +486,21 @@ function renderDiplomacy(){
     const subs=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;});
     box.innerHTML='<div class="small">当前选择的是己方聚落。</div>'+
       '<p class="small muted">向我方贡纳：'+(subs.length?subs.map(ownerName).join("、"):"无")+'</p>';
-    ["#btn-gift","#btn-foreign-grain","#btn-demand-tribute","#btn-declare-war","#btn-peace"].forEach(function(id){$(id).disabled=true;});
+    ["#btn-scout","#btn-gift","#btn-foreign-grain","#btn-demand-tribute","#btn-declare-war","#btn-peace"].forEach(function(id){$(id).disabled=true;});
     return;
   }
   const other=s.owner,rel=relation(state.player,other),war=isAtWar(state.player,other);
   const subject=state.tribute[other]===state.player;
   const ours=state.tribute[state.player]===other;
+  const il=intelLevel(s);
   box.innerHTML=
     '<div class="stats"><span>对象</span><b>'+ownerName(other)+'</b>'+
+    '<span>情报</span><b>'+["未知","粗略","较详","确切"][il]+'</b>'+
     '<span>关系</span><b class="'+(rel>=25?"good":rel<=-20?"bad":"warning")+'">'+rel+'</b>'+
     '<span>状态</span><b class="'+(war?"bad":"good")+'">'+(war?"交战":"和平")+'</b>'+
     '<span>服属</span><b>'+(subject?"向我贡纳":ours?"我方向其贡纳":"无")+'</b></div>'+
     '<p class="small muted">以贝进行礼物和交换是有意识的玩法简化；贡纳不等于直接吞并。</p>';
+  $("#btn-scout").disabled=!canScoutSettlement(s);
   $("#btn-gift").disabled=war;
   $("#btn-foreign-grain").disabled=war||rel<-20;
   $("#btn-demand-tribute").disabled=war||subject;
@@ -750,6 +863,7 @@ function occupySettlement(a,city){
   const old=city.owner;
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
   city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
+  if(state.intel)delete state.intel[city.id];
   delete state.governors[city.id];
   delete state.sieges[city.id];
   faction(a.owner).prestige+=2;
@@ -1157,6 +1271,7 @@ function endTurn(){
 
   runAiActions(actions,0,function(){
     if(state.gameOver){turnBusy=false;render();return;}
+    state.tick=(state.tick||0)+1;
     state.season++;
     if(state.season>3){state.season=0;state.year++;state.turn++;}
     populationTick();
@@ -1271,6 +1386,16 @@ function selectedForeignFaction(){
   const s=getSet(state.selectedSettlement);
   return s&&s.owner!==state.player?s.owner:null;
 }
+function scoutForeign(){
+  const s=getSet(state.selectedSettlement),f=faction(state.player);
+  if(!s||s.owner===state.player)return notice("请选择外国聚落。");
+  if(!canScoutSettlement(s))return notice("需要选中一支位于该聚落相邻节点的我方军队，才能派出斥候。");
+  if(f.shells<20)return notice("派遣向导、斥候和收买消息需要 20 贝。");
+  f.shells-=20;
+  setIntel(s.id,3,4);
+  addLog("斥候返回，获得"+s.name+"的较确切情报；情报会随时间逐渐失效。","good");
+  render();
+}
 function giftForeign(){
   const other=selectedForeignFaction(),f=faction(state.player);
   if(!other)return notice("请选择外国聚落。");
@@ -1290,6 +1415,7 @@ function foreignGrainTrade(){
   const dest=ownedSettlements().sort(function(a,b){return a.grain-b.grain;})[0];
   f.shells-=price;faction(other).shells+=price;src.grain-=amount;dest.grain+=amount;
   changeRelation(state.player,other,2);
+  setIntel(src.id,2,6);
   tryLearnTech(state.player,other,"商旅与随行工匠往来",.10);
   addLog("与"+ownerName(other)+"交易，以 "+price+" 贝购得 "+amount+" 石粮，运往"+dest.name+"。","good");render();
 }
@@ -1377,7 +1503,7 @@ function showHelp(){
   notice(
     '<b>一局的核心循环</b><br>'+
     '经营人口、粮仓、贝与兵器 → 选择何时征发劳力和军队 → 保持民夫与粮道 → 通过贸易、贡纳或战争扩张影响。<br><br>'+
-    '<b>地图操作</b><br>点击聚落查看；先选中我方军队，再点击相邻聚落即可行军。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
+    '<b>地图与情报</b><br>点击聚落查看；先选中我方军队，再点击相邻聚落即可行军。外国城邑默认不会显示精确人口、粮仓和军队；靠近、贸易、服属或派斥候可提升情报。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
     '<b>军队</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要装备与训练。军队可以分军、合军。<br><br>'+
     '<b>战斗</b><br>实时战场中左键选单位，右键移动或攻击。胜负主要来自士气、队形、疲劳、侧击和溃败，而不是把所有人杀光。<br><br>'+
     '<b>围城</b><br>设防聚落需要围困。等待可消耗城粮，也可强攻土垣和壕沟。<br><br>'+
@@ -1412,6 +1538,8 @@ function loadGame(){
     state.tribute=state.tribute||{};
     state.wars=state.wars||{};
     state.warTurns=state.warTurns||{};
+    state.intel=state.intel||{};
+    state.tick=state.tick||0;
     $("#newgame-overlay").classList.remove("show");
     refreshAllSupply();addLog("已读取本机存档。","good");render();
   }catch(e){notice("读取失败："+e.message);}
@@ -1449,6 +1577,7 @@ $("#btn-free-slaves").onclick=freeSlaves;
 $("#btn-workshop").onclick=workshop;
 $("#btn-market").onclick=market;
 $("#btn-trade-tech").onclick=tradeTech;
+$("#btn-scout").onclick=scoutForeign;
 $("#btn-gift").onclick=giftForeign;
 $("#btn-foreign-grain").onclick=foreignGrainTrade;
 $("#btn-demand-tribute").onclick=demandTribute;
@@ -1460,6 +1589,13 @@ $("#btn-assault").onclick=assaultCurrentSiege;
 $("#btn-split-army").onclick=splitArmy;
 $("#btn-merge-armies").onclick=mergeArmies;
 $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、青铜正规军和战车需训练。人口、兵器、贝、粮食都真实扣除。";
+
+window.SHANGZHOU_DEBUG={
+  getState:function(){return deepCopy(state);},
+  startGame:startGame,
+  endTurn:endTurn,
+  intelLevel:function(id){return intelLevel(getSet(id));}
+};
 
 state=freshState("shang");
 refreshAllSupply();
