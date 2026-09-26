@@ -99,8 +99,8 @@
     }
 
     buildArmy(army, side, isAttacker){
-      const baseX = side === "player" ? this.w*.18 : this.w*.82;
-      const dir = side === "player" ? 1 : -1;
+      const baseX = this.config.siege ? (isAttacker ? this.w*.17 : this.w*.82) : (side === "player" ? this.w*.18 : this.w*.82);
+      const dir = this.config.siege ? (isAttacker ? 1 : -1) : (side === "player" ? 1 : -1);
       let row = 0, col = 0;
       const commander = this.config.commanders?.[army.id];
       army.units.forEach((u, idx) => {
