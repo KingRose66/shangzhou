@@ -13,6 +13,32 @@ function getArmy(id){ return state.armies.find(function(a){return a.id===id;}); 
 function getChar(id){ return state.characters.find(function(c){return c.id===id;}); }
 function faction(id){ return state.factions[id]; }
 function ownerName(id){ return faction(id) ? faction(id).name : id; }
+function pairKey(a,b){ return [a,b].sort().join("|"); }
+function isAtWar(a,b){ return !!state.wars[pairKey(a,b)]; }
+function relation(a,b){
+  if(a===b)return 100;
+  const fa=faction(a);
+  return fa&&typeof fa.relations[b]==="number"?fa.relations[b]:0;
+}
+function setRelation(a,b,v){
+  if(a===b)return;
+  v=Math.max(-100,Math.min(100,Math.round(v)));
+  faction(a).relations[b]=v;
+  faction(b).relations[a]=v;
+}
+function changeRelation(a,b,d){ setRelation(a,b,relation(a,b)+d); }
+function declareWar(a,b,logIt){
+  if(a===b||isAtWar(a,b))return;
+  state.wars[pairKey(a,b)]=true;
+  if(state.tribute[a]===b)delete state.tribute[a];
+  if(state.tribute[b]===a)delete state.tribute[b];
+  setRelation(a,b,Math.min(-45,relation(a,b)-35));
+  if(logIt!==false)addLog(ownerName(a)+"与"+ownerName(b)+"进入战争状态。","bad");
+}
+function makePeace(a,b){
+  delete state.wars[pairKey(a,b)];
+  setRelation(a,b,Math.max(-5,relation(a,b)));
+}
 function armyMen(a){ return a.units.reduce(function(n,u){return n+Math.max(0,u.men);},0); }
 function hasTech(owner,id){ return !!(faction(owner)&&faction(owner).tech.includes(id)); }
 function playerOwnsSettlement(id){ const s=getSet(id); return s && s.owner===state.player; }
@@ -94,6 +120,8 @@ function freshState(player){
        grain:390,fodder:170,laborers:50,laborMix:{clan:20,slave:30},morale:65,supplyState:"畅通",supplyPath:["gaodi"]}
     ],
     training:[],
+    wars:{"gaodi|shang":true},
+    tribute:{},
     selectedSettlement:player==="zhou"?"zhouyuan":"yin",
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
@@ -128,6 +156,7 @@ function render(){
   renderCharacters();
   renderMap();
   renderSettlement();
+  renderDiplomacy();
   renderArmies();
   renderArmyDetail();
   renderTraining();
@@ -260,6 +289,32 @@ function renderSettlement(){
     '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮。</p>'+
     '<p class="small '+(friendly?"good":"warning")+'">'+(friendly?"可在此征募、采买、训练并征调民夫。":"非我方聚落；军事占领或政治服属后方可直接调用资源。")+'</p>'+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
+}
+
+function renderDiplomacy(){
+  const s=getSet(state.selectedSettlement);
+  const box=$("#diplomacy-detail");
+  if(!box||!s){return;}
+  if(s.owner===state.player){
+    const subs=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;});
+    box.innerHTML='<div class="small">当前选择的是己方聚落。</div>'+
+      '<p class="small muted">向我方贡纳：'+(subs.length?subs.map(ownerName).join("、"):"无")+'</p>';
+    ["#btn-gift","#btn-foreign-grain","#btn-demand-tribute","#btn-declare-war"].forEach(function(id){$(id).disabled=true;});
+    return;
+  }
+  const other=s.owner,rel=relation(state.player,other),war=isAtWar(state.player,other);
+  const subject=state.tribute[other]===state.player;
+  const ours=state.tribute[state.player]===other;
+  box.innerHTML=
+    '<div class="stats"><span>对象</span><b>'+ownerName(other)+'</b>'+
+    '<span>关系</span><b class="'+(rel>=25?"good":rel<=-20?"bad":"warning")+'">'+rel+'</b>'+
+    '<span>状态</span><b class="'+(war?"bad":"good")+'">'+(war?"交战":"和平")+'</b>'+
+    '<span>服属</span><b>'+(subject?"向我贡纳":ours?"我方向其贡纳":"无")+'</b></div>'+
+    '<p class="small muted">以贝进行礼物和交换是有意识的玩法简化；贡纳不等于直接吞并。</p>';
+  $("#btn-gift").disabled=war;
+  $("#btn-foreign-grain").disabled=war||rel<-20;
+  $("#btn-demand-tribute").disabled=war||subject;
+  $("#btn-declare-war").disabled=war;
 }
 
 function renderArmies(){
@@ -436,6 +491,9 @@ function moveArmy(a,targetId,after){
   if(!origin.roads.includes(targetId))return notice("只能沿相邻道路或通道行军。");
   const need=requiredLaborers(a);
   if(a.laborers<need)return notice(a.name+"民夫不足。当前 "+a.laborers+"，至少需要 "+need+" 人。");
+  if(dest.owner!==a.owner&&!isAtWar(a.owner,dest.owner)){
+    declareWar(a.owner,dest.owner,true);
+  }
   const cost=marchCost(a,dest);
   if(a.grain<cost.grain)return notice("随军粮不足，至少需要约 "+Math.ceil(cost.grain)+" 石才能行军。");
 
@@ -683,7 +741,12 @@ function chooseAiAction(owner){
   if(!armies.length)return null;
   let a=armies.sort(function(x,y){return armyPower(y)-armyPower(x);})[0];
   const s=getSet(a.at);
-  const targets=s.roads.map(getSet).filter(function(n){return n.owner!==owner;});
+  const targets=s.roads.map(getSet).filter(function(n){
+    if(n.owner===owner)return false;
+    if(isAtWar(owner,n.owner))return true;
+    if(n.owner==="neutral"&&relation(owner,n.owner)<=5)return true;
+    return relation(owner,n.owner)<-20;
+  });
   if(!targets.length)return null;
   targets.sort(function(x,y){
     const xp=(x.owner===state.player?0:250)+(x.capital?-300:0)+(x.pop.clan+x.pop.slave)*.01;
@@ -691,6 +754,7 @@ function chooseAiAction(owner){
     return xp-yp;
   });
   const target=targets[0];
+  if(!isAtWar(owner,target.owner))declareWar(owner,target.owner,true);
   const defender=state.armies.find(function(x){return x.owner!==owner&&x.at===target.id&&armyMen(x)>0;});
   if(defender&&armyPower(a,target,true)<armyPower(defender,target,false)*1.12)return null;
   if(a.laborers<requiredLaborers(a)||a.grain<marchCost(a,target).grain)return null;
@@ -717,11 +781,30 @@ function runAiActions(actions,index,done){
   }
 }
 
+function processTribute(){
+  Object.keys(state.tribute).forEach(function(subject){
+    const overlord=state.tribute[subject];
+    if(!faction(subject)||!faction(overlord)||isAtWar(subject,overlord)){delete state.tribute[subject];return;}
+    const subSets=ownedSettlements(subject);
+    const overSets=ownedSettlements(overlord);
+    if(!subSets.length||!overSets.length)return;
+    const shells=Math.min(faction(subject).shells,35+subSets.length*12);
+    faction(subject).shells-=shells;faction(overlord).shells+=shells;
+    const source=subSets.sort(function(a,b){return b.grain-a.grain;})[0];
+    const dest=overSets.sort(function(a,b){return a.grain-b.grain;})[0];
+    const grain=Math.min(source.grain,80+subSets.length*25);
+    source.grain-=grain;dest.grain+=grain;
+    if(overlord===state.player)addLog(ownerName(subject)+"按季贡纳 "+shells+" 贝、"+Math.round(grain)+" 石粮。","good");
+    if(subject===state.player)addLog("向"+ownerName(overlord)+"贡纳 "+shells+" 贝、"+Math.round(grain)+" 石粮。","warning");
+  });
+}
+
 function endTurn(){
   if(turnBusy||state.gameOver)return;
   turnBusy=true;
   processTraining();
   settlementEconomy();
+  processTribute();
   consumeArmies();
   if(state.season===2)harvest();
   ["shang","zhou","gaodi"].forEach(function(owner){if(owner!==state.player)aiRecruit(owner);});
@@ -839,6 +922,59 @@ function tradeTech(){
   render();
 }
 
+function selectedForeignFaction(){
+  const s=getSet(state.selectedSettlement);
+  return s&&s.owner!==state.player?s.owner:null;
+}
+function giftForeign(){
+  const other=selectedForeignFaction(),f=faction(state.player);
+  if(!other)return notice("请选择外国聚落。");
+  if(isAtWar(state.player,other))return notice("交战状态下不能普通赠礼。");
+  if(f.shells<80)return notice("需要 80 贝。");
+  f.shells-=80;faction(other).shells+=80;changeRelation(state.player,other,10);
+  addLog("向"+ownerName(other)+"赠送 80 贝，关系改善。","good");render();
+}
+function foreignGrainTrade(){
+  const other=selectedForeignFaction(),f=faction(state.player),src=getSet(state.selectedSettlement);
+  if(!other)return notice("请选择外国聚落。");
+  if(isAtWar(state.player,other)||relation(state.player,other)<-20)return notice("当前关系不足以进行正常贸易。");
+  const amount=Math.min(300,src.grain);
+  if(amount<80)return notice("对方此地没有足够余粮可供交易。");
+  const price=Math.round((95-src.market*6)*(1-Math.max(-.15,Math.min(.18,relation(state.player,other)/300))));
+  if(f.shells<price)return notice("需要 "+price+" 贝。");
+  const dest=ownedSettlements().sort(function(a,b){return a.grain-b.grain;})[0];
+  f.shells-=price;faction(other).shells+=price;src.grain-=amount;dest.grain+=amount;
+  changeRelation(state.player,other,2);
+  addLog("与"+ownerName(other)+"交易，以 "+price+" 贝购得 "+amount+" 石粮，运往"+dest.name+"。","good");render();
+}
+function demandTribute(){
+  const other=selectedForeignFaction();
+  if(!other)return notice("请选择外国聚落。");
+  if(isAtWar(state.player,other))return notice("交战时应通过战争迫使其屈服，而不是普通外交要求。");
+  const rel=relation(state.player,other);
+  const pDiff=faction(state.player).prestige-faction(other).prestige;
+  const military=state.armies.filter(function(a){return a.owner===state.player;}).reduce(function(n,a){return n+armyPower(a);},0)/
+    Math.max(1,state.armies.filter(function(a){return a.owner===other;}).reduce(function(n,a){return n+armyPower(a);},0));
+  const score=rel*.6+pDiff*.9+(military-1)*22+Math.random()*24;
+  if(score>=38){
+    state.tribute[other]=state.player;changeRelation(state.player,other,8);
+    faction(state.player).prestige+=3;
+    addLog(ownerName(other)+"接受服属关系，开始向我方贡纳。","good");
+    notice(ownerName(other)+"同意保持自身统治，但承认服属并按季贡纳。","服属达成");
+  }else{
+    changeRelation(state.player,other,-7);
+    addLog(ownerName(other)+"拒绝贡纳要求，双方关系恶化。","warning");
+    notice(ownerName(other)+"拒绝了要求。提高威望、军力或先改善关系，会增加成功机会。","要求被拒");
+  }
+  render();
+}
+function playerDeclareWar(){
+  const other=selectedForeignFaction();
+  if(!other)return notice("请选择外国聚落。");
+  if(isAtWar(state.player,other))return notice("双方已经处于战争状态。");
+  declareWar(state.player,other,true);render();
+}
+
 function checkVictory(){
   if(state.gameOver)return;
   const own=ownedSettlements(state.player);
@@ -903,6 +1039,10 @@ $("#btn-free-slaves").onclick=freeSlaves;
 $("#btn-workshop").onclick=workshop;
 $("#btn-market").onclick=market;
 $("#btn-trade-tech").onclick=tradeTech;
+$("#btn-gift").onclick=giftForeign;
+$("#btn-foreign-grain").onclick=foreignGrainTrade;
+$("#btn-demand-tribute").onclick=demandTribute;
+$("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、青铜正规军和战车需训练。人口、兵器、贝、粮食都真实扣除。";
