@@ -56,7 +56,7 @@
       this.aiClock = 0;
       this.selected = null;
       this.units = [];
-      this.buildTerrain(config.terrain);
+      this.buildTerrain(config.terrain,config.siege);
       this.buildArmy(config.playerArmy, "player", config.playerArmy.owner === config.attacker.owner);
       this.buildArmy(config.enemyArmy, "enemy", config.enemyArmy.owner === config.attacker.owner);
       this.status.textContent = `${config.locationName} · ${config.terrainName} · 右键下达移动/攻击命令`;
@@ -74,7 +74,7 @@
       this.h = box.height;
     }
 
-    buildTerrain(kind){
+    buildTerrain(kind,siege){
       const w = this.w || 1000, h = this.h || 620;
       const zones = [];
       if(["hill","highland","rolling"].includes(kind)){
@@ -90,6 +90,10 @@
       }
       if(kind === "river"){
         zones.push({type:"mud",x:w*.46,y:0,w:w*.09,h:h});
+      }
+      if(siege){
+        zones.push({type:"rampart",x:w*.67,y:h*.08,w:w*.045,h:h*.84,gateY:h*.50,gateHalf:58});
+        zones.push({type:"ditch",x:w*.625,y:h*.08,w:w*.028,h:h*.84,gateY:h*.50,gateHalf:64});
       }
       this.terrainZones = zones;
     }
@@ -123,7 +127,10 @@
 
     terrainAt(u){
       for(const z of this.terrainZones){
-        if(u.x>=z.x && u.x<=z.x+z.w && u.y>=z.y && u.y<=z.y+z.h) return z.type;
+        if(u.x>=z.x && u.x<=z.x+z.w && u.y>=z.y && u.y<=z.y+z.h){
+          if((z.type==="rampart"||z.type==="ditch") && Math.abs(u.y-z.gateY)<=z.gateHalf) continue;
+          return z.type;
+        }
       }
       return "open";
     }
@@ -131,11 +138,15 @@
     terrainFactor(u){
       const t=this.terrainAt(u);
       if(u.type==="chariot"){
+        if(t==="rampart") return .06;
+        if(t==="ditch") return .08;
         if(t==="forest") return .28;
         if(t==="mud") return .22;
         if(t==="hill") return .52;
         if(t==="field") return .82;
       }
+      if(t==="rampart") return .30;
+      if(t==="ditch") return .36;
       if(t==="hill") return .83;
       if(t==="forest") return .72;
       if(t==="mud") return .68;
@@ -393,6 +404,19 @@
           c.fillStyle="rgba(164,139,73,.3)";c.fillRect(z.x,z.y,z.w,z.h);
           c.strokeStyle="rgba(82,63,35,.25)";
           for(let y=z.y;y<z.y+z.h;y+=13){c.beginPath();c.moveTo(z.x,y);c.lineTo(z.x+z.w,y);c.stroke()}
+        } else if(z.type==="ditch"){
+          c.fillStyle="rgba(49,45,34,.7)";
+          c.fillRect(z.x,z.y,z.w,z.gateY-z.gateHalf-z.y);
+          c.fillRect(z.x,z.gateY+z.gateHalf,z.w,(z.y+z.h)-(z.gateY+z.gateHalf));
+        } else if(z.type==="rampart"){
+          c.fillStyle="rgba(103,72,42,.88)";
+          c.fillRect(z.x,z.y,z.w,z.gateY-z.gateHalf-z.y);
+          c.fillRect(z.x,z.gateY+z.gateHalf,z.w,(z.y+z.h)-(z.gateY+z.gateHalf));
+          c.strokeStyle="rgba(222,190,130,.45)";c.lineWidth=2;
+          c.strokeRect(z.x,z.y,z.w,z.gateY-z.gateHalf-z.y);
+          c.strokeRect(z.x,z.gateY+z.gateHalf,z.w,(z.y+z.h)-(z.gateY+z.gateHalf));
+          c.fillStyle="rgba(61,39,24,.92)";c.fillRect(z.x-4,z.gateY-z.gateHalf, z.w+8,z.gateHalf*2);
+          c.fillStyle="rgba(238,214,164,.6)";c.font="12px sans-serif";c.fillText("门",z.x+z.w/2-6,z.gateY+4);
         }
       }
     }
