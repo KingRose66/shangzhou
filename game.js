@@ -344,6 +344,8 @@ function renderMap(){
     const n=document.createElement("div");
     n.className="node "+s.owner+(s.capital?" capital":"")+(state.selectedSettlement===s.id?" selected":"")+(supplyNodes.has(s.id)?" supply":"");
     n.style.left=s.x+"%";n.style.top=s.y+"%";
+    n.dataset.settlementId=s.id;
+    n.setAttribute("aria-label",s.name);
     n.title=s.name+"｜"+terrainNames[s.terrain]+"｜史实级别 "+s.confidence;
     n.onclick=function(){selectSettlement(s.id);};
     map.appendChild(n);
@@ -379,18 +381,26 @@ function renderMap(){
 
 function selectSettlement(id){
   if(state.gameOver)return;
-  const selected=getArmy(state.selectedArmy);
-  if(selected&&selected.owner===state.player&&selected.at!==id&&getSet(selected.at).roads.includes(id)){
-    moveArmy(selected,id);
-    return;
-  }
   state.selectedSettlement=id;
   render();
+}
+function marchSelectedArmy(){
+  const a=getArmy(state.selectedArmy);
+  const target=getSet(state.selectedSettlement);
+  if(!a||a.owner!==state.player)return notice("请先选择一支我方军队。");
+  if(!target||target.id===a.at)return notice("请先选择一个相邻目的地。");
+  const at=getSet(a.at);
+  if(!at.roads.includes(target.id))return notice("该聚落不与军队当前位置直接相邻。需要逐节点行军。");
+  moveArmy(a,target.id);
 }
 function selectArmy(id){
   const a=getArmy(id);
   if(!a||a.owner!==state.player)return;
-  state.selectedArmy=id;state.selectedSettlement=a.at;render();
+  state.selectedArmy=id;
+  const target=getSet(state.selectedSettlement);
+  const at=getSet(a.at);
+  if(!target||(target.id!==a.at&&!at.roads.includes(target.id)))state.selectedSettlement=a.at;
+  render();
 }
 window.selectArmy=selectArmy;
 
@@ -526,6 +536,8 @@ function renderArmyDetail(){
   const a=getArmy(state.selectedArmy);
   if(!a||a.owner!==state.player){
     $("#army-detail").innerHTML='<span class="muted">请选择一支我方军队。</span>';
+    $("#btn-march").disabled=true;
+    $("#btn-march").textContent="行军至选中聚落";
     $("#btn-assault").disabled=true;
     return;
   }
@@ -553,6 +565,10 @@ function renderArmyDetail(){
     '<p class="small muted">粮道：'+(path||"无可用路径")+'</p>'+
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
+  const marchTarget=getSet(state.selectedSettlement);
+  const canMarch=!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
+  $("#btn-march").disabled=!canMarch;
+  $("#btn-march").textContent=canMarch?"行军至 "+marchTarget.name:"行军至选中聚落";
   $("#btn-assault").disabled=!siege;
 }
 
@@ -1503,7 +1519,7 @@ function showHelp(){
   notice(
     '<b>一局的核心循环</b><br>'+
     '经营人口、粮仓、贝与兵器 → 选择何时征发劳力和军队 → 保持民夫与粮道 → 通过贸易、贡纳或战争扩张影响。<br><br>'+
-    '<b>地图与情报</b><br>点击聚落查看；先选中我方军队，再点击相邻聚落即可行军。外国城邑默认不会显示精确人口、粮仓和军队；靠近、贸易、服属或派斥候可提升情报。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
+    '<b>地图与情报</b><br>点击聚落查看；行军时先选中我方军队，再点相邻目的地检查情报，最后点击“行军至选中聚落”确认。外国城邑默认不会显示精确人口、粮仓和军队；靠近、贸易、服属或派斥候可提升情报。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
     '<b>军队</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要装备与训练。军队可以分军、合军。<br><br>'+
     '<b>战斗</b><br>实时战场中左键选单位，右键移动或攻击。胜负主要来自士气、队形、疲劳、侧击和溃败，而不是把所有人杀光。<br><br>'+
     '<b>围城</b><br>设防聚落需要围困。等待可消耗城粮，也可强攻土垣和壕沟。<br><br>'+
@@ -1583,6 +1599,7 @@ $("#btn-foreign-grain").onclick=foreignGrainTrade;
 $("#btn-demand-tribute").onclick=demandTribute;
 $("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-peace").onclick=offerPeace;
+$("#btn-march").onclick=marchSelectedArmy;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#btn-assault").onclick=assaultCurrentSiege;
