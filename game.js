@@ -359,7 +359,7 @@ function renderDiplomacy(){
     const subs=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;});
     box.innerHTML='<div class="small">当前选择的是己方聚落。</div>'+
       '<p class="small muted">向我方贡纳：'+(subs.length?subs.map(ownerName).join("、"):"无")+'</p>';
-    ["#btn-gift","#btn-foreign-grain","#btn-demand-tribute","#btn-declare-war"].forEach(function(id){$(id).disabled=true;});
+    ["#btn-gift","#btn-foreign-grain","#btn-demand-tribute","#btn-declare-war","#btn-peace"].forEach(function(id){$(id).disabled=true;});
     return;
   }
   const other=s.owner,rel=relation(state.player,other),war=isAtWar(state.player,other);
@@ -375,6 +375,7 @@ function renderDiplomacy(){
   $("#btn-foreign-grain").disabled=war||rel<-20;
   $("#btn-demand-tribute").disabled=war||subject;
   $("#btn-declare-war").disabled=war;
+  $("#btn-peace").disabled=!war;
 }
 
 function renderArmies(){
@@ -1222,6 +1223,26 @@ function demandTribute(){
   }
   render();
 }
+function offerPeace(){
+  const other=selectedForeignFaction(),f=faction(state.player);
+  if(!other)return notice("请选择正在交战的外国聚落。");
+  if(!isAtWar(state.player,other))return notice("双方并未交战。");
+  if(f.shells<120)return notice("派遣使者、奉送礼物需要 120 贝。");
+  const ourPower=state.armies.filter(function(a){return a.owner===state.player;}).reduce(function(n,a){return n+armyPower(a);},0);
+  const theirPower=state.armies.filter(function(a){return a.owner===other;}).reduce(function(n,a){return n+armyPower(a);},0);
+  const chance=Math.max(.35,Math.min(.9,.60+(theirPower-ourPower)/Math.max(1,ourPower+theirPower)*.30+relation(state.player,other)/500));
+  f.shells-=120;faction(other).shells+=120;
+  if(Math.random()<chance){
+    makePeace(state.player,other);changeRelation(state.player,other,12);
+    addLog("与"+ownerName(other)+"议和，战争结束。","good");
+    notice("对方接受贝与礼物，双方停止战争。","议和达成");
+  }else{
+    changeRelation(state.player,other,3);
+    addLog(ownerName(other)+"暂拒议和，但收下使者礼物。","warning");
+    notice("对方尚不愿停战。若战局或双方力量发生变化，可再次尝试。","议和未成");
+  }
+  render();
+}
 function playerDeclareWar(){
   const other=selectedForeignFaction();
   if(!other)return notice("请选择外国聚落。");
@@ -1261,6 +1282,19 @@ function checkVictory(){
   }
 }
 
+function showHelp(){
+  notice(
+    '<b>一局的核心循环</b><br>'+
+    '经营人口、粮仓、贝与兵器 → 选择何时征发劳力和军队 → 保持民夫与粮道 → 通过贸易、贡纳或战争扩张影响。<br><br>'+
+    '<b>地图操作</b><br>点击聚落查看；先选中我方军队，再点击相邻聚落即可行军。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
+    '<b>军队</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要装备与训练。军队可以分军、合军。<br><br>'+
+    '<b>战斗</b><br>实时战场中左键选单位，右键移动或攻击。胜负主要来自士气、队形、疲劳、侧击和溃败，而不是把所有人杀光。<br><br>'+
+    '<b>围城</b><br>设防聚落需要围困。等待可消耗城粮，也可强攻土垣和壕沟。<br><br>'+
+    '<b>历史标签</b><br>A=直接证据；B=较强推定；C=合理玩法复原。贝作为通用货币等属于明确的可玩性简化。',
+    '玩法概要'
+  );
+}
+
 function archive(){
   const html=DATA.archive.map(function(x){
     return '<p><b>'+x.name+'</b> <span class="badge '+x.confidence.toLowerCase()+'">'+x.era+'</span><br><span class="muted">'+x.note+'</span></p>';
@@ -1277,7 +1311,15 @@ function loadGame(){
   try{
     const raw=localStorage.getItem("shangzhou-save");
     if(!raw)return notice("没有找到本机存档。");
-    state=JSON.parse(raw);
+    const loaded=JSON.parse(raw);
+    if(loaded.version!==DATA.version){
+      return notice("该存档来自 "+(loaded.version||"旧版本")+"，当前版本为 "+DATA.version+"。地图和规则已经变化，请开始新局。","存档版本不兼容");
+    }
+    state=loaded;
+    state.governors=state.governors||{};
+    state.sieges=state.sieges||{};
+    state.tribute=state.tribute||{};
+    state.wars=state.wars||{};
     $("#newgame-overlay").classList.remove("show");
     refreshAllSupply();addLog("已读取本机存档。","good");render();
   }catch(e){notice("读取失败："+e.message);}
@@ -1295,6 +1337,7 @@ $$("[data-unit]").forEach(function(b){b.onclick=function(){recruit(b.dataset.uni
 $$("[data-faction-choice]").forEach(function(b){b.onclick=function(){startGame(b.dataset.factionChoice);};});
 $("#btn-end-turn").onclick=endTurn;
 $("#btn-new").onclick=showNewGame;
+$("#btn-help").onclick=showHelp;
 $("#btn-save").onclick=saveGame;
 $("#btn-load").onclick=loadGame;
 $("#btn-clear-army").onclick=function(){state.selectedArmy=null;render();};
@@ -1311,6 +1354,7 @@ $("#btn-gift").onclick=giftForeign;
 $("#btn-foreign-grain").onclick=foreignGrainTrade;
 $("#btn-demand-tribute").onclick=demandTribute;
 $("#btn-declare-war").onclick=playerDeclareWar;
+$("#btn-peace").onclick=offerPeace;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#btn-assault").onclick=assaultCurrentSiege;
