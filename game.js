@@ -29,14 +29,19 @@ function setRelation(a,b,v){
 function changeRelation(a,b,d){ setRelation(a,b,relation(a,b)+d); }
 function declareWar(a,b,logIt){
   if(a===b||isAtWar(a,b))return;
-  state.wars[pairKey(a,b)]=true;
+  const key=pairKey(a,b);
+  state.wars[key]=true;
+  state.warTurns=state.warTurns||{};
+  state.warTurns[key]=0;
   if(state.tribute[a]===b)delete state.tribute[a];
   if(state.tribute[b]===a)delete state.tribute[b];
   setRelation(a,b,Math.min(-45,relation(a,b)-35));
   if(logIt!==false)addLog(ownerName(a)+"与"+ownerName(b)+"进入战争状态。","bad");
 }
 function makePeace(a,b){
-  delete state.wars[pairKey(a,b)];
+  const key=pairKey(a,b);
+  delete state.wars[key];
+  if(state.warTurns)delete state.warTurns[key];
   setRelation(a,b,Math.max(-5,relation(a,b)));
 }
 function armyMen(a){ return a.units.reduce(function(n,u){return n+Math.max(0,u.men);},0); }
@@ -111,7 +116,7 @@ function chariotCount(a){
 function freshState(player){
   const chars=deepCopy(DATA.characters);
   return {
-    version:DATA.version,player:player||"shang",year:-1120,season:0,turn:1,idCounter:30,
+    version:DATA.version,player:player||"shang",year:-1115,season:0,turn:1,idCounter:30,
     factions:deepCopy(DATA.factions),
     settlements:deepCopy(DATA.settlements),
     characters:chars,
@@ -140,6 +145,7 @@ function freshState(player){
     ],
     training:[],
     wars:{"gaodi|shang":true},
+    warTurns:{"gaodi|shang":1},
     tribute:{},
     sieges:{},
     governors:{yin:"shang_steward",zhouyuan:"zhou_steward"},
@@ -1033,6 +1039,80 @@ function runAiActions(actions,index,done){
   }
 }
 
+function factionPower(owner){
+  const armies=state.armies.filter(function(a){return a.owner===owner;});
+  const military=armies.reduce(function(n,a){return n+armyPower(a);},0);
+  const pop=ownedSettlements(owner).reduce(function(n,s){return n+s.pop.clan+s.pop.slave;},0);
+  return military+pop*.12+faction(owner).prestige*9;
+}
+function shareBorder(a,b){
+  return state.settlements.some(function(s){
+    return s.owner===a&&s.roads.some(function(id){const n=getSet(id);return n&&n.owner===b;});
+  });
+}
+function aiDiplomaticPulse(){
+  state.warTurns=state.warTurns||{};
+  Object.keys(state.wars).forEach(function(key){state.warTurns[key]=(state.warTurns[key]||0)+1;});
+  // Only make structural diplomatic choices at the start of a new year.
+  if(state.season!==0)return;
+  const majors=Object.keys(state.factions).filter(function(x){return x!=="neutral";});
+  for(let i=0;i<majors.length;i++){
+    for(let j=i+1;j<majors.length;j++){
+      const a=majors[i],b=majors[j],key=pairKey(a,b);
+      if(!shareBorder(a,b))continue;
+
+      // Player wars are never ended or begun silently; the player keeps agency.
+      if(a===state.player||b===state.player){
+        if(!isAtWar(a,b)){
+          const other=a===state.player?b:a;
+          // Expanding powers make neighbors more wary, but this is gradual.
+          const expansion=Math.max(0,ownedSettlements(other).length-2);
+          if(expansion>1 && relation(a,b)>-30 && Math.random()<.45){
+            changeRelation(a,b,-Math.min(5,1+expansion));
+            addLog("邻近的"+ownerName(other)+"势力扩张，引起边境戒备。","warning");
+          }
+        }
+        continue;
+      }
+
+      if(isAtWar(a,b)){
+        const duration=state.warTurns[key]||0;
+        const pa=factionPower(a),pb=factionPower(b);
+        const exhausted=duration>=6;
+        const lopsided=Math.max(pa,pb)/Math.max(1,Math.min(pa,pb))>1.8;
+        if(duration>=4 && Math.random()<(exhausted?.30:.10)+(lopsided?.12:0)){
+          makePeace(a,b);
+          changeRelation(a,b,10);
+          addLog(ownerName(a)+"与"+ownerName(b)+"停止战争。");
+        }
+      }else{
+        // Border friction, rivalry and relative power can turn into war, but positive relations strongly suppress it.
+        const rel=relation(a,b);
+        const pa=factionPower(a),pb=factionPower(b);
+        const ratio=Math.max(pa,pb)/Math.max(1,Math.min(pa,pb));
+        let tension=(-rel)/120 + (ratio<1.55?.08:0);
+        if(rel>15)tension-=.20;
+        if(rel>30)tension-=.20;
+        if(rel<-25)tension+=.16;
+        if(Math.random()<Math.max(0,Math.min(.34,tension))){
+          declareWar(a,b,true);
+        }else if(Math.random()<.28){
+          changeRelation(a,b,Math.random()<.55?2:-2);
+        }
+      }
+    }
+  }
+
+  // A stronger Zhou next to Shang creates strategic concern without forcing a scripted war.
+  if(!isAtWar("shang","zhou")&&shareBorder("shang","zhou")){
+    const zhouGrowth=Math.max(0,ownedSettlements("zhou").length-2);
+    if(zhouGrowth>=2&&faction("zhou").prestige>=52){
+      changeRelation("shang","zhou",-Math.min(4,zhouGrowth));
+      if(state.player==="shang"||state.player==="zhou")addLog("周在西土的扩张开始改变商周之间的力量判断。","warning");
+    }
+  }
+}
+
 function processTribute(){
   Object.keys(state.tribute).forEach(function(subject){
     const overlord=state.tribute[subject];
@@ -1058,6 +1138,7 @@ function endTurn(){
   settlementEconomy();
   processTribute();
   processSieges();
+  aiDiplomaticPulse();
   consumeArmies();
   if(state.season===2)harvest();
   const activeFactions=Object.keys(state.factions).filter(function(owner){return owner!=="neutral";});
@@ -1320,6 +1401,7 @@ function loadGame(){
     state.sieges=state.sieges||{};
     state.tribute=state.tribute||{};
     state.wars=state.wars||{};
+    state.warTurns=state.warTurns||{};
     $("#newgame-overlay").classList.remove("show");
     refreshAllSupply();addLog("已读取本机存档。","good");render();
   }catch(e){notice("读取失败："+e.message);}
