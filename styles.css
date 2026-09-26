@@ -75,6 +75,7 @@ repeating-linear-gradient(110deg,transparent 0 34px,rgba(255,255,255,.014) 35px 
 .node-meta{position:absolute;transform:translate(-50%,27px);white-space:nowrap;font-size:9px;color:#b5a58e;text-shadow:0 1px 3px #000;pointer-events:none;z-index:4}
 .army-token{position:absolute;z-index:5;transform:translate(-50%,-50%);border-radius:4px;padding:4px 6px;background:#111d;border:1px solid #b59768;font-size:10px;cursor:pointer;box-shadow:0 2px 7px #0008}
 .army-token.enemy{border-color:#a75c4d}
+.army-token.foreign{border-color:#7f9274;background:#151d16dd}
 .army-token.selected{outline:2px solid #e7c76d}
 .map-bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px}
 .log{height:148px;overflow:auto;font-size:12px;line-height:1.55;padding-right:4px}
