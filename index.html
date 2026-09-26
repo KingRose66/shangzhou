@@ -3,17 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#17130f" />
   <title>大邑商：四土</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">晚商战略原型 · Vertical Slice</div>
+      <div class="brand">
+        <div class="eyebrow">晚商大战略 · v0.3 Alpha</div>
         <h1>大邑商：四土</h1>
       </div>
       <div class="top-actions">
+        <button id="btn-save">保存</button>
+        <button id="btn-load">读取</button>
         <button id="btn-new">新局</button>
         <button id="btn-end-turn" class="primary">结束本季</button>
       </div>
@@ -25,6 +28,7 @@
       <div><span>贝</span><b id="hud-shells">0</b></div>
       <div><span>粮</span><b id="hud-grain">0 石</b></div>
       <div><span>草料</span><b id="hud-fodder">0</b></div>
+      <div><span>牲畜</span><b id="hud-livestock">0</b></div>
       <div><span>族人</span><b id="hud-clansmen">0</b></div>
       <div><span>奴隶</span><b id="hud-slaves">0</b></div>
     </section>
@@ -35,20 +39,22 @@
           <h2>政权</h2>
           <div id="faction-summary"></div>
         </div>
+
         <div class="panel">
           <div class="panel-title-row">
             <h2>人物</h2>
-            <button id="btn-archive" class="tiny">史实档案</button>
+            <button id="btn-archive" class="tiny">历代档案</button>
           </div>
           <div id="characters"></div>
         </div>
+
         <div class="panel">
           <h2>礼制</h2>
           <div class="button-stack">
             <button id="btn-divine">占卜</button>
             <button id="btn-sacrifice">祭祀</button>
           </div>
-          <small>占卜给出不完全可靠的军事提示；祭祀消耗贝与牲畜，提高威望和短期士气。</small>
+          <small>轻量系统：不要求管理复杂仪式，但会影响威望、军心和重大决策提示。</small>
         </div>
       </aside>
 
@@ -56,23 +62,28 @@
         <div class="map-toolbar">
           <div>
             <b>战略地图</b>
-            <span class="muted">点击聚落查看详情；选中我方军队后再点相邻聚落可行军。</span>
+            <span class="muted">选中军队后，点击相邻节点行军。道路、渡口和敌军会影响粮道。</span>
           </div>
           <div class="legend">
             <span><i class="dot shang"></i>商</span>
             <span><i class="dot zhou"></i>周</span>
             <span><i class="dot gaodi"></i>高地方</span>
-            <span><i class="dot neutral"></i>中立/小方</span>
+            <span><i class="dot neutral"></i>小方</span>
           </div>
         </div>
+
         <div id="map" class="map"></div>
+
         <div class="map-bottom">
           <div class="panel compact">
-            <h2>军队</h2>
+            <div class="panel-title-row">
+              <h2>军队</h2>
+              <button id="btn-clear-army" class="tiny">取消选军</button>
+            </div>
             <div id="armies"></div>
           </div>
           <div class="panel compact">
-            <h2>季节事件</h2>
+            <h2>时局与季节事件</h2>
             <div id="log" class="log"></div>
           </div>
         </div>
@@ -83,24 +94,39 @@
           <h2 id="settlement-title">聚落详情</h2>
           <div id="settlement-detail" class="muted">请选择一个聚落。</div>
         </div>
+
+        <div class="panel" id="army-panel">
+          <h2>军队详情</h2>
+          <div id="army-detail" class="muted">请选择一支我方军队。</div>
+          <div class="button-stack top-gap">
+            <button id="btn-labor">征调民夫 50</button>
+            <button id="btn-disband-labor">遣返民夫 50</button>
+          </div>
+        </div>
+
         <div class="panel">
           <h2>征募与训练</h2>
           <div class="recruit-grid">
             <button data-unit="slave_levy">征发奴隶</button>
             <button data-unit="clan_levy">征召族兵</button>
-            <button data-unit="archer">征募弓手</button>
+            <button data-unit="archer">训练弓手</button>
             <button data-unit="bronze_ge">训练青铜戈兵</button>
             <button data-unit="bronze_spear">训练青铜矛兵</button>
+            <button data-unit="royal_guard">训练王族甲士</button>
             <button data-unit="chariot">编练战车</button>
           </div>
           <div id="recruit-help" class="muted small"></div>
+          <div id="training-queue" class="small top-gap"></div>
         </div>
+
         <div class="panel">
-          <h2>内政</h2>
+          <h2>内政与交换</h2>
           <div class="button-stack">
-            <button id="btn-buy-grain">采买 300 石粮</button>
+            <button id="btn-buy-grain">以贝采买 300 石粮</button>
+            <button id="btn-buy-fodder">以贝采买 300 草料</button>
             <button id="btn-free-slaves">赎释 100 奴隶为族人</button>
             <button id="btn-workshop">扩建铸造作坊</button>
+            <button id="btn-market">扩建交换场</button>
             <button id="btn-trade-tech">延请外来工匠</button>
           </div>
         </div>
@@ -113,6 +139,46 @@
     <form method="dialog"><button>关闭</button></form>
   </dialog>
 
+  <div id="newgame-overlay" class="screen-overlay show">
+    <div class="start-card">
+      <div class="eyebrow">大邑商：四土 · 西土渐强</div>
+      <h2>选择势力</h2>
+      <p>约公元前12世纪后期。商仍是最强政治中心，周正在西土扩张。当前版本先用安阳—晋陕—关中走廊验证完整大地图共用的规则。</p>
+      <div class="faction-choice">
+        <button class="choice" data-faction-choice="shang">
+          <b>大邑商</b>
+          <span>青铜、车战、人口和威望占优；需要维持漫长的服属网络。</span>
+        </button>
+        <button class="choice" data-faction-choice="zhou">
+          <b>周</b>
+          <span>体量较小，但宗族征召、农业组织与西向扩张潜力较强。</span>
+        </button>
+      </div>
+      <small>当前测试版本不会把不同时代史实人物强行放在一起。武丁、妇好保留在独立剧本人物档案中。</small>
+    </div>
+  </div>
+
+  <div id="battle-overlay" class="battle-overlay">
+    <div class="battle-topbar">
+      <div>
+        <b>实时野战</b>
+        <span id="battle-status">—</span>
+      </div>
+      <div class="battle-controls">
+        <button id="battle-pause">暂停</button>
+        <button id="battle-speed">速度 ×1</button>
+        <button id="battle-retreat">撤退</button>
+      </div>
+    </div>
+    <canvas id="battle-canvas"></canvas>
+    <div class="battle-footer">
+      <div id="battle-unit-detail">点击己方单位查看状态；右键地面移动，右键敌军攻击。</div>
+      <div class="muted">战斗核心：队形、士气、疲劳、地形与溃败。战车适合侧击和追击，不适合在森林、泥地里硬冲。</div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="battle.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
