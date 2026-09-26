@@ -688,9 +688,11 @@ function beginEncounter(attacker,defender,attackerFrom,after){
   const pc=getChar(playerArmy.commander),ec=getChar(enemyArmy.commander);
   turnBusy=true;
 
+  const siegeMode=!!(defender.temporaryGarrison&&state.sieges[location.id]);
   BATTLE_ENGINE.start({
     attacker:attacker,defender:defender,playerArmy:playerArmy,enemyArmy:enemyArmy,
-    terrain:location.terrain,terrainName:terrainNames[location.terrain],locationName:location.name,
+    terrain:location.terrain,terrainName:siegeMode?"土垣聚落强攻":terrainNames[location.terrain],locationName:location.name,
+    siege:siegeMode,
     commanders:{[playerArmy.id]:pc,[enemyArmy.id]:ec},
     onFinish:function(result){
       resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,attackerFrom,after);
