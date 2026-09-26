@@ -42,6 +42,21 @@ for (const factionId of playable) {
 }
 
 window.document.querySelector('[data-faction-choice="shang"]').click();
+
+// Remote foreign settlements should not expose omniscient information.
+assert(window.SHANGZHOU_DEBUG.intelLevel("wucheng")===0,"remote intelligence should begin unknown for Shang");
+window.document.querySelector('[data-settlement-id="wucheng"]').click();
+assert(window.document.querySelector("#settlement-detail").textContent.includes("未知"),"unknown foreign settlement exposes too much information");
+
+// Move near the active Shang-highland frontier, then scout without accidentally marching into battle.
+window.document.querySelector('[data-settlement-id="jinnan"]').click();
+window.document.querySelector("#btn-march").click();
+window.document.querySelector('[data-settlement-id="gaodi"]').click();
+assert(!window.document.querySelector("#btn-scout").disabled,"scouting should be available from an adjacent field army");
+window.document.querySelector("#btn-scout").click();
+assert(window.SHANGZHOU_DEBUG.intelLevel("gaodi")===3,"scouting did not reveal exact short-term intelligence");
+
+window.document.querySelector('[data-settlement-id="yin"]').click();
 const before=window.document.querySelector("#hud-clansmen").textContent;
 window.document.querySelector('[data-unit="clan_levy"]').click();
 const after=window.document.querySelector("#hud-clansmen").textContent;
