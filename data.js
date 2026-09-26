@@ -91,7 +91,7 @@ const GAME_DATA = {
       farm:52,forge:0,market:2,wall:0,roads:["jinnan","zhouyuan","gaodi"]
     },
     {
-      id:"gaodi",name:"寨沟高地中心",owner:"gaodi",x:43,y:29,
+      id:"gaodi",name:"寨沟高地中心",owner:"gaodi",x:43,y:29,capital:true,
       terrain:"highland",region:"陕北清涧",confidence:"A",
       pop:{clan:7600,slave:1800},grain:3500,fodder:3700,bronze:260,
       weapons:{wood:1000,bow:230,ge:120,spear:65,chariot:7},
