@@ -42,7 +42,11 @@ select{background:#2c241c;color:#eadfc9;border:1px solid #66513a;border-radius:5
 .dot.zhou,.node.zhou{background:#c2a24b}
 .dot.gaodi,.node.gaodi{background:#668b69}
 .dot.neutral,.node.neutral{background:#77716a}
-.map{height:57vh;min-height:500px;position:relative;overflow:hidden;background:
+.dot.dongfang,.node.dongfang{background:#8e6b58}
+.dot.jianghan,.node.jianghan{background:#4e7b70}
+.dot.wucheng,.node.wucheng{background:#7b5f82}
+.dot.shu,.node.shu{background:#94733c}
+.map{height:64vh;min-height:560px;position:relative;overflow:hidden;background:
 radial-gradient(circle at 30% 46%,rgba(131,107,69,.24),transparent 22%),
 radial-gradient(circle at 68% 58%,rgba(125,87,49,.28),transparent 25%),
 linear-gradient(12deg,rgba(59,72,47,.35),transparent 35%),
