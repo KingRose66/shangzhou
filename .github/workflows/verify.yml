@@ -21,3 +21,5 @@ jobs:
         run: node scripts/browser-smoke.mjs
       - name: Multi-year campaign soak test
         run: node scripts/campaign-soak.mjs
+      - name: Tactical facing and flank logic
+        run: node scripts/battle-logic.mjs
