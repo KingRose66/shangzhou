@@ -323,6 +323,17 @@ function selectArmy(id){
 }
 window.selectArmy=selectArmy;
 
+function forecastHarvest(s){
+  const localArmies=state.armies.filter(function(a){return a.at===s.id;});
+  const drawn=localArmies.reduce(function(n,a){return n+armyMen(a)+a.laborers;},0);
+  const pop=s.pop.clan+s.pop.slave;
+  const laborPenalty=Math.min(.38,drawn/Math.max(1000,pop)*1.55);
+  let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
+  const gov=getChar(state.governors[s.id]);
+  if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
+  if(hasTech(s.owner,"wei_farming"))crop*=1.08;
+  return Math.max(0,Math.round(crop));
+}
 function renderSettlement(){
   const s=getSet(state.selectedSettlement);
   if(!s){$("#settlement-detail").innerHTML='<span class="muted">请选择一个聚落。</span>';return;}
@@ -348,7 +359,7 @@ function renderSettlement(){
       '<span>交换场</span><b>'+s.market+'级</b>'+
     '</div>'+
     '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
-    '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮。</p>'+
+    '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮；按当前征发状态，预计秋收约 <b>'+fmt(forecastHarvest(s))+' 石</b>。</p>'+
     '<p class="small '+(friendly?"good":"warning")+'">'+(friendly?"可在此征募、采买、训练并征调民夫。":"非我方聚落；军事占领或政治服属后方可直接调用资源。")+'</p>'+
     (friendly?'<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>':'')+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
@@ -425,6 +436,7 @@ function renderArmyDetail(){
     '</div>'+
     '<div class="army-orders"><label>统军将领</label><select id="commander-select">'+options+'</select></div>'+
     '<div class="unit-list">'+rows+'</div>'+
+    '<p class="small">仅按随军粮估算可维持约 <b>'+endurance.toFixed(1)+' 季</b>（粮道补给未计入）。</p>'+
     '<p class="small muted">粮道：'+(path||"无可用路径")+'</p>'+
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
@@ -681,6 +693,8 @@ function assaultCurrentSiege(){
   const siege=state.sieges[a.at];
   if(!siege||siege.attackerArmyId!==a.id)return notice("该军当前没有围困城邑。");
   const city=getSet(a.at);
+  const assaultLabor=requiredLaborers(a)+40;
+  if(a.laborers<assaultLabor)return notice("强攻需要至少 "+assaultLabor+" 名民夫，其中额外民夫负责填壕、梯具与土工作业。当前只有 "+a.laborers+" 人。");
   const garrison=createSiegeGarrison(city);
   if(!garrison.units.length||armyMen(garrison)<=0){
     occupySettlement(a,city);delete state.sieges[city.id];render();return;
@@ -897,11 +911,7 @@ function harvest(){
     const drawn=localArmies.reduce(function(n,a){return n+armyMen(a)+a.laborers;},0);
     const pop=s.pop.clan+s.pop.slave;
     const laborPenalty=Math.min(.38,drawn/Math.max(1000,pop)*1.55);
-    let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
-    const gov=getChar(state.governors[s.id]);
-    if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
-    if(hasTech(s.owner,"wei_farming"))crop*=1.08;
-    crop=Math.round(crop);
+    const crop=forecastHarvest(s);
     s.grain+=crop;
     if(s.owner===state.player)addLog(s.name+"秋收 "+fmt(crop)+" 石"+(laborPenalty>.12?"；军役抽走过多劳力，收成受损。":""),laborPenalty>.12?"warning":"good");
   });
@@ -1415,7 +1425,14 @@ function showNewGame(){
   $("#newgame-overlay").classList.add("show");
 }
 
-$$("[data-unit]").forEach(function(b){b.onclick=function(){recruit(b.dataset.unit);};});
+$("[data-unit]").forEach(function(b){
+  const u=DATA.units[b.dataset.unit];
+  if(u){
+    b.textContent=u.name+" "+u.size;
+    b.title="需要 "+u.shell+" 贝、"+u.grain+" 石粮、"+u.weaponNeed+" "+({wood:"件木骨兵器",bow:"张弓",ge:"件青铜戈",spear:"件青铜矛",chariot:"乘战车"}[u.weapon]||u.weapon)+(u.fodder?"、"+u.fodder+" 草料":"")+"；训练 "+u.train+" 季";
+  }
+  b.onclick=function(){recruit(b.dataset.unit);};
+});
 $$("[data-faction-choice]").forEach(function(b){b.onclick=function(){startGame(b.dataset.factionChoice);};});
 $("#btn-end-turn").onclick=endTurn;
 $("#btn-new").onclick=showNewGame;
