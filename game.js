@@ -65,6 +65,13 @@ function nextId(prefix){
 function charAssignedArmy(charId){
   return state.armies.find(function(a){return a.commander===charId;});
 }
+function charAssignedSettlement(charId){
+  const id=Object.keys(state.governors||{}).find(function(k){return state.governors[k]===charId;});
+  return id?getSet(id):null;
+}
+function removeGovernorAssignments(charId){
+  Object.keys(state.governors||{}).forEach(function(id){if(state.governors[id]===charId)delete state.governors[id];});
+}
 function commanderBonus(a){
   const c=getChar(a.commander);
   return c ? 0.82+c.command/250 : 1;
@@ -135,6 +142,7 @@ function freshState(player){
     wars:{"gaodi|shang":true},
     tribute:{},
     sieges:{},
+    governors:{yin:"shang_steward",zhouyuan:"zhou_steward"},
     selectedSettlement:player==="zhou"?"zhouyuan":"yin",
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
@@ -196,11 +204,11 @@ function renderFaction(){
 function renderCharacters(){
   const chars=state.characters.filter(function(c){return c.faction===state.player&&c.alive;});
   $("#characters").innerHTML=chars.map(function(c){
-    const army=charAssignedArmy(c.id);
+    const army=charAssignedArmy(c.id),gov=charAssignedSettlement(c.id);
     return '<div class="char-card">'+
       '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+'</span>'+
       '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+'</div>'+
-      '<div class="small">'+c.trait+(army?' · <span class="good">统领 '+army.name+'</span>':'')+'</div>'+
+      '<div class="small">'+c.trait+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
     '</div>';
   }).join("");
 }
@@ -285,6 +293,10 @@ function renderSettlement(){
   const friendly=s.owner===state.player;
   const pop=s.pop.clan+s.pop.slave;
   const foodTurns=s.grain/Math.max(1,pop*.012);
+  const governor=s.owner===state.player?getChar(state.governors[s.id]):null;
+  const govOptions=s.owner===state.player?'<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&c.alive;}).map(function(c){
+    return '<option value="'+c.id+'" '+(state.governors[s.id]===c.id?"selected":"")+'>'+c.name+'（治政 '+c.admin+'）</option>';
+  }).join(""):"";
   $("#settlement-detail").innerHTML=
     '<div class="stats">'+
       '<span>控制</span><b>'+ownerName(s.owner)+'</b>'+
@@ -301,7 +313,11 @@ function renderSettlement(){
     '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
     '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮。</p>'+
     '<p class="small '+(friendly?"good":"warning")+'">'+(friendly?"可在此征募、采买、训练并征调民夫。":"非我方聚落；军事占领或政治服属后方可直接调用资源。")+'</p>'+
+    (friendly?'<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>':'')+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
+  if(friendly){
+    $("#governor-select").onchange=function(){assignGovernor(s.id,this.value);};
+  }
 }
 
 function renderDiplomacy(){
@@ -398,9 +414,26 @@ function assignCommander(armyId,charId){
   if(charId){
     const other=charAssignedArmy(charId);
     if(other&&other.id!==a.id)other.commander=null;
+    removeGovernorAssignments(charId);
   }
   a.commander=charId||null;
   addLog(a.name+(charId?"任命 "+getChar(charId).name+" 为统军将领。":"暂不设主将。"));
+  render();
+}
+
+function assignGovernor(settlementId,charId){
+  const s=getSet(settlementId);
+  if(!s||s.owner!==state.player)return;
+  if(charId){
+    const army=charAssignedArmy(charId);
+    if(army)army.commander=null;
+    removeGovernorAssignments(charId);
+    state.governors[settlementId]=charId;
+    addLog("任命 "+getChar(charId).name+" 主政 "+s.name+"。");
+  }else{
+    delete state.governors[settlementId];
+    addLog(s.name+"暂不设专任主政者。");
+  }
   render();
 }
 
@@ -609,6 +642,7 @@ function occupySettlement(a,city){
   const old=city.owner;
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
   city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
+  delete state.governors[city.id];
   delete state.sieges[city.id];
   faction(a.owner).prestige+=2;
   addLog(city.name+"在无成建制守军情况下屈服于"+ownerName(a.owner)+"；约 "+capt+" 人被编为奴隶/俘口。","good");
@@ -738,14 +772,16 @@ function settlementEconomy(){
     }
 
     const owner=faction(s.owner);
-    owner.shells+=Math.round(pop*.00055*(1+s.market*.32));
+    const gov=getChar(state.governors[s.id]);
+    const govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
+    owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco);
 
-    const woodGain=Math.round(pop*.0025);
+    const woodGain=Math.round(pop*.0025*(hasTech(s.owner,"local_craft")?1.10:1));
     s.weapons.wood+=woodGain;
     s.weapons.bow+=Math.round(pop*.00022);
 
     if(s.forge>0&&s.bronze>5){
-      const mult=hasTech(s.owner,"piece_mold")?1.2:hasTech(s.owner,"improved_mold")?1.15:1;
+      const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1);
       const use=Math.min(s.bronze,Math.round(s.forge*12));
       s.bronze-=use;
       s.weapons.ge+=Math.round(use*.52*mult);
@@ -764,6 +800,8 @@ function harvest(){
     const pop=s.pop.clan+s.pop.slave;
     const laborPenalty=Math.min(.38,drawn/Math.max(1000,pop)*1.55);
     let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
+    const gov=getChar(state.governors[s.id]);
+    if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
     if(hasTech(s.owner,"wei_farming"))crop*=1.08;
     crop=Math.round(crop);
     s.grain+=crop;
