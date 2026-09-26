@@ -224,8 +224,39 @@ function routeLine(a,b,map,blocked){
 function nodeBlocked(id,owner){
   return state.armies.some(function(a){return a.owner!==owner&&a.at===id&&armyMen(a)>0;});
 }
+function renderTerrainBackdrop(map){
+  const wrap=document.createElement("div");
+  wrap.className="terrain-backdrop";
+  wrap.innerHTML=
+    '<svg viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">'+
+      '<defs>'+
+        '<linearGradient id="riverFade" x1="0" x2="1"><stop offset="0" stop-color="#668b91"/><stop offset="1" stop-color="#466f78"/></linearGradient>'+
+        '<pattern id="ridge" width="22" height="14" patternUnits="userSpaceOnUse"><path d="M0 14 L11 2 L22 14" fill="none" stroke="rgba(164,143,102,.24)" stroke-width="2"/></pattern>'+
+      '</defs>'+
+      '<path class="river major" d="M40,304 C155,300 215,348 330,331 C430,315 452,278 535,292 C640,311 690,275 790,266 C875,258 920,279 990,292"/>'+
+      '<path class="river" d="M92,338 C180,356 252,356 325,347 C378,340 410,325 454,315"/>'+
+      '<path class="river" d="M754,423 C824,409 880,406 995,420"/>'+
+      '<path class="river major" d="M515,520 C620,515 706,528 790,548 C866,565 932,561 995,552"/>'+
+      '<path class="river" d="M682,438 C674,475 676,504 697,531"/>'+
+      '<path class="mountain-area" d="M566,112 C610,126 642,163 650,221 C655,269 635,326 617,373 C603,408 590,438 570,458 L530,444 C552,390 558,343 565,288 C571,229 556,170 566,112 Z"/>'+
+      '<path class="mountain-area qinling" d="M230,430 C330,416 430,425 548,444 C616,455 664,462 710,468 L694,501 C585,486 475,475 372,478 C304,480 252,471 214,459 Z"/>'+
+      '<rect x="0" y="0" width="1000" height="600" fill="url(#ridge)" opacity=".15"/>'+
+      '<text class="geo-label" x="515" y="270">黄河</text>'+
+      '<text class="geo-label" x="245" y="345">渭水</text>'+
+      '<text class="geo-label" x="820" y="408">淮水</text>'+
+      '<text class="geo-label" x="835" y="548">大江</text>'+
+      '<text class="geo-label land" x="598" y="218">太行</text>'+
+      '<text class="geo-label land" x="435" y="465">秦岭</text>'+
+      '<text class="region-label" x="745" y="215">王 畿</text>'+
+      '<text class="region-label" x="260" y="250">西 土</text>'+
+      '<text class="region-label" x="900" y="350">东 土</text>'+
+      '<text class="region-label" x="690" y="565">南 土</text>'+
+    '</svg>';
+  map.appendChild(wrap);
+}
 function renderMap(){
   const map=$("#map");map.innerHTML="";
+  renderTerrainBackdrop(map);
   const seen=new Set();
   state.settlements.forEach(function(a){
     a.roads.forEach(function(id){
@@ -587,7 +618,7 @@ function createSiegeGarrison(city){
   }
   const g={id:nextId("g"),owner:owner,name:city.name+"守军",at:city.id,previous:city.id,commander:null,
     units:units,grain:Math.min(220,city.grain*.08),fodder:0,laborers:25,laborMix:{clan:10,slave:15},
-    morale:Math.min(72,54+city.wall*8),supplyState:"畅通",supplyPath:[city.id],temporaryGarrison:true};
+    morale:Math.min(78,54+city.wall*8+(hasTech(owner,"fortification")?6:0)),supplyState:"畅通",supplyPath:[city.id],temporaryGarrison:true};
   state.armies.push(g);
   return g;
 }
@@ -728,7 +759,8 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
 function autoResolve(attacker,defender,attackerFrom){
   const s=getSet(attacker.at);
   const pa=armyPower(attacker,s,true)*(.9+Math.random()*.2);
-  const pd=armyPower(defender,s,false)*(.9+Math.random()*.2)*(s.wall?1+s.wall*.08:1);
+  const fort=s.wall?1+s.wall*.08+(hasTech(defender.owner,"fortification")?.15:0):1;
+  const pd=armyPower(defender,s,false)*(.9+Math.random()*.2)*fort;
   const winner=pa>=pd?attacker:defender,loser=winner===attacker?defender:attacker;
   const ratio=Math.max(pa,pd)/Math.max(1,Math.min(pa,pd));
   damageArmy(winner,Math.min(.22,.07+.035/ratio));
