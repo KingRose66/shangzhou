@@ -134,3 +134,15 @@ dialog::backdrop{background:#0009}
   .faction-choice{grid-template-columns:1fr}
   .battle-footer{grid-template-columns:1fr}
 }
+.encounter-overlay{z-index:75}
+.encounter-card{width:min(760px,95vw);background:linear-gradient(180deg,#2a2119,#19140f);border:1px solid #755b3c;border-radius:12px;padding:24px;box-shadow:0 28px 90px #000a}
+.encounter-card h2{font-family:Georgia,"Noto Serif SC",serif;font-size:28px;margin:8px 0 16px}
+.encounter-grid{display:grid;grid-template-columns:1fr 120px 1fr;gap:16px;align-items:stretch;margin:14px 0 18px}
+.encounter-force{background:#211a14;border:1px solid #4b3a2a;border-radius:8px;padding:14px}
+.encounter-force.player{border-color:#8c7448}
+.encounter-force.enemy{border-color:#79463c}
+.encounter-force h3{margin:0 0 8px;font-family:Georgia,"Noto Serif SC",serif}
+.encounter-vs{display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:26px;color:#a99472}
+.encounter-terrain{padding:9px 11px;border:1px solid #4a3a2a;border-radius:7px;background:#191510;font-size:12px;line-height:1.6}
+.encounter-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 10px}
+@media(max-width:700px){.encounter-grid{grid-template-columns:1fr}.encounter-vs{min-height:30px}.encounter-actions{grid-template-columns:1fr}}
