@@ -143,7 +143,7 @@ function freshState(player){
     tribute:{},
     sieges:{},
     governors:{yin:"shang_steward",zhouyuan:"zhou_steward"},
-    selectedSettlement:player==="zhou"?"zhouyuan":"yin",
+    selectedSettlement:(DATA.settlements.find(function(s){return s.owner===player&&s.capital;})||DATA.settlements.find(function(s){return s.owner===player;})).id,
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
     omen:null,
@@ -1160,11 +1160,25 @@ function checkVictory(){
     notice("你的核心都邑已经失守。当前测试局结束。","战役失败");
     return;
   }
-  const rival=state.player==="shang"?"zhou":"shang";
-  const rivalCap=DATA.settlements.find(function(s){return s.owner===rival&&s.capital;});
-  if(rivalCap&&getSet(rivalCap.id).owner===state.player&&own.length>=5){
-    state.gameOver=true;
-    notice("你已夺取对手核心并控制至少五个战略节点。当前小地图测试局判定胜利。","战役胜利");
+  const tributeCount=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
+  if(state.player==="shang"){
+    const zhouCap=getSet("zhouyuan");
+    if((tributeCount>=3&&faction(state.player).prestige>=110)||(zhouCap&&zhouCap.owner===state.player&&own.length>=8)){
+      state.gameOver=true;
+      notice("大邑商重新建立了足以覆盖四方的霸权网络。","战役胜利");
+    }
+  }else if(state.player==="zhou"){
+    const yin=getSet("yin");
+    if(yin&&yin.owner===state.player&&own.length>=8){
+      state.gameOver=true;
+      notice("周已夺取大邑商核心，并形成新的区域统治网络。","战役胜利");
+    }
+  }else{
+    const yin=getSet("yin");
+    if((yin&&yin.owner===state.player)||(own.length>=7&&faction(state.player).prestige>=90&&tributeCount>=1)){
+      state.gameOver=true;
+      notice("你的政体已经成长为足以改变四方秩序的区域霸权。","战役胜利");
+    }
   }
 }
 
