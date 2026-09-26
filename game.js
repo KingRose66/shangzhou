@@ -52,6 +52,17 @@ function setIntel(id,level,duration){
   state.intel=state.intel||{};
   state.intel[id]={level:Math.max(level,state.intel[id]?.level||0),expires:state.tick+(duration||4)};
 }
+function controlEfficiency(s){
+  const control=typeof s.control==="number"?s.control:100;
+  return .55+Math.max(0,Math.min(100,control))*.0045;
+}
+function controlBand(s){
+  const control=typeof s.control==="number"?s.control:100;
+  if(control<35)return "服从脆弱";
+  if(control<60)return "尚未稳固";
+  if(control<82)return "基本服从";
+  return "统治稳定";
+}
 function populationBand(pop){
   if(pop<4000)return "小型聚落";
   if(pop<9000)return "中型聚落";
@@ -203,10 +214,12 @@ function chariotCount(a){
 
 function freshState(player){
   const chars=deepCopy(DATA.characters);
+  const settlements=deepCopy(DATA.settlements);
+  settlements.forEach(function(s){s.control=100;});
   return {
     version:DATA.version,player:player||"shang",year:-1115,season:0,turn:1,idCounter:30,
     factions:deepCopy(DATA.factions),
-    settlements:deepCopy(DATA.settlements),
+    settlements:settlements,
     characters:chars,
     armies:[
       {id:"a1",owner:"shang",name:"王师",at:"yin",previous:"yin",commander:"shang_general",
@@ -280,8 +293,11 @@ function render(){
   renderLog();
 }
 
+function securedSettlementCount(owner){
+  return ownedSettlements(owner).filter(function(s){return (s.control==null?100:s.control)>=50;}).length;
+}
 function campaignObjectiveHtml(){
-  const f=faction(state.player),own=ownedSettlements().length;
+  const f=faction(state.player),own=securedSettlementCount(state.player);
   const subjects=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
   if(state.player==="shang"){
     return '<b>霸权目标</b>：贡纳势力 '+subjects+'/3 · 威望 '+f.prestige+'/110；或控制周原且拥有 '+own+'/8 个聚落。';
@@ -455,6 +471,7 @@ function forecastHarvest(s){
   if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
   if(gov&&gov.trait==="善治仓廪")crop*=1.08;
   if(hasTech(s.owner,"wei_farming"))crop*=1.08;
+  crop*=controlEfficiency(s);
   return Math.max(0,Math.round(crop));
 }
 function renderSettlement(){
@@ -485,6 +502,7 @@ function renderSettlement(){
         '<span>粮情</span><b>'+grainBand(s)+'</b>'+
         '<span>铸造</span><b>'+ (s.forge>0?"有作坊":"未见明显作坊") +'</b>'+
         '<span>交换</span><b>'+ (s.market>=2?"较活跃":"一般") +'</b>'+
+        '<span>地方态势</span><b>'+controlBand(s)+'</b>'+
         '<span>军势</span><b>'+enemyArmyLabelAt(s)+'</b></div>'+
         '<p class="small muted">贸易、臣属关系或较长期接触得到的较详细估计，仍可能存在误差。</p>';
     }else{
@@ -494,6 +512,7 @@ function renderSettlement(){
         '<span>粮仓</span><b>'+fmt(s.grain)+' 石</b>'+
         '<span>草料</span><b>'+fmt(s.fodder)+'</b>'+
         '<span>青铜料</span><b>'+fmt(s.bronze)+'</b>'+
+        '<span>地方服从</span><b>'+Math.round(s.control==null?100:s.control)+'/100</b>'+
         '<span>军势</span><b>'+enemyArmyLabelAt(s)+'</b></div>'+
         '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
         '<p class="small">按当前观察，粮储约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度基础口粮。</p>';
@@ -518,6 +537,7 @@ function renderSettlement(){
       '<span>粮仓</span><b>'+fmt(s.grain)+' 石</b>'+
       '<span>草料</span><b>'+fmt(s.fodder)+'</b>'+
       '<span>青铜料</span><b>'+fmt(s.bronze)+'</b>'+
+      '<span>地方服从</span><b>'+Math.round(s.control==null?100:s.control)+'/100</b>'+
       '<span>秋收潜力</span><b>'+s.farm+'</b>'+
       '<span>铸造</span><b>'+s.forge+'级</b>'+
       '<span>交换场</span><b>'+s.market+'级</b>'+
@@ -953,6 +973,7 @@ function occupySettlement(a,city){
   const old=city.owner;
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
   city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
+  city.control=38;
   if(state.intel)delete state.intel[city.id];
   delete state.governors[city.id];
   delete state.sieges[city.id];
@@ -1173,7 +1194,7 @@ function settlementEconomy(){
     const gov=getChar(state.governors[s.id]);
     let govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
     if(gov&&gov.trait==="善治仓廪")govEco*=1.08;
-    owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco);
+    owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco*controlEfficiency(s));
 
     const woodGain=Math.round(pop*.0025*(hasTech(s.owner,"local_craft")?1.10:1));
     s.weapons.wood+=woodGain;
@@ -1237,6 +1258,21 @@ function consumeArmies(){
     if(a.fodder<0){
       a.fodder=0;a.morale=Math.max(10,a.morale-3);
     }
+  });
+}
+
+function processLocalControl(){
+  state.settlements.forEach(function(s){
+    if(typeof s.control!=="number")s.control=100;
+    if(s.control>=100)return;
+    if(state.sieges[s.id])return;
+    const gov=getChar(state.governors[s.id]);
+    const garrison=state.armies.some(function(a){return a.owner===s.owner&&a.at===s.id&&armyMen(a)>=80;});
+    let gain=1.5;
+    if(gov)gain+=1.5+Math.max(0,(gov.admin-55)/30);
+    if(garrison)gain+=2.5;
+    gain+=Math.max(0,(faction(s.owner).prestige-50)/80);
+    s.control=Math.min(100,s.control+gain);
   });
 }
 
@@ -1436,6 +1472,7 @@ function endTurn(){
   settlementEconomy();
   processTribute();
   processSieges();
+  processLocalControl();
   aiDiplomaticPulse();
   consumeArmies();
   if(state.season===2)harvest();
@@ -1649,6 +1686,7 @@ function playerDeclareWar(){
 function checkVictory(){
   if(state.gameOver)return;
   const own=ownedSettlements(state.player);
+  const secured=securedSettlementCount(state.player);
   const playerCapital=DATA.settlements.find(function(s){return s.owner===state.player&&s.capital;});
   const capNow=playerCapital?getSet(playerCapital.id):null;
   if(capNow&&capNow.owner!==state.player){
@@ -1659,19 +1697,19 @@ function checkVictory(){
   const tributeCount=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
   if(state.player==="shang"){
     const zhouCap=getSet("zhouyuan");
-    if((tributeCount>=3&&faction(state.player).prestige>=110)||(zhouCap&&zhouCap.owner===state.player&&own.length>=8)){
+    if((tributeCount>=3&&faction(state.player).prestige>=110)||(zhouCap&&zhouCap.owner===state.player&&secured>=8)){
       state.gameOver=true;
       notice("大邑商重新建立了足以覆盖四方的霸权网络。","战役胜利");
     }
   }else if(state.player==="zhou"){
     const yin=getSet("yin");
-    if(yin&&yin.owner===state.player&&own.length>=8){
+    if(yin&&yin.owner===state.player&&secured>=8){
       state.gameOver=true;
       notice("周已夺取大邑商核心，并形成新的区域统治网络。","战役胜利");
     }
   }else{
     const yin=getSet("yin");
-    if((yin&&yin.owner===state.player)||(own.length>=7&&faction(state.player).prestige>=90&&tributeCount>=1)){
+    if((yin&&yin.owner===state.player)||(secured>=7&&faction(state.player).prestige>=90&&tributeCount>=1)){
       state.gameOver=true;
       notice("你的政体已经成长为足以改变四方秩序的区域霸权。","战役胜利");
     }
@@ -1683,6 +1721,7 @@ function showHelp(){
     '<b>一局的核心循环</b><br>'+
     '经营人口、粮仓、贝与兵器 → 选择何时征发劳力和军队 → 保持民夫与粮道 → 通过贸易、贡纳或战争扩张影响。<br><br>'+
     '<b>地图与情报</b><br>点击聚落查看；行军时先选中我方军队，再点相邻目的地检查情报，最后点击“行军至选中聚落”确认。外国城邑默认不会显示精确人口、粮仓和军队；靠近、贸易、服属或派斥候可提升情报。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
+    '<b>统治</b><br>新征服聚落不会立刻贡献全部产能；地方服从度会在驻军、邑宰、威望和时间作用下逐步恢复。<br><br>'+
     '<b>军队</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要装备与训练。军队可以分军、合军。<br><br>'+
     '<b>战斗</b><br>实时战场中左键选单位，右键移动或攻击。胜负主要来自士气、队形、疲劳、侧击和溃败，而不是把所有人杀光。<br><br>'+
     '<b>围城</b><br>设防聚落需要围困。等待可消耗城粮，也可强攻土垣和壕沟。<br><br>'+
@@ -1720,6 +1759,7 @@ function loadGame(){
     state.warTurns=state.warTurns||{};
     state.intel=state.intel||{};
     state.tick=state.tick||0;
+    state.settlements.forEach(function(s){if(typeof s.control!=="number")s.control=100;});
     $("#newgame-overlay").classList.remove("show");
     refreshAllSupply();addLog("已读取本机存档。","good");render();
   }catch(e){notice("读取失败："+e.message);}
