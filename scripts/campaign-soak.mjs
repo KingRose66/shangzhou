@@ -54,6 +54,11 @@ for(const factionId of playable){
   let survived=0;
   for(let q=0;q<24;q++){
     window.SHANGZHOU_DEBUG.endTurn();
+    let encounterGuard=0;
+    while(window.SHANGZHOU_DEBUG.hasPendingEncounter()&&encounterGuard++<20){
+      window.SHANGZHOU_DEBUG.autoPendingEncounter();
+    }
+    assert(encounterGuard<20,factionId+" encounter resolution loop did not settle");
     const s=window.SHANGZHOU_DEBUG.getState();
     survived=q+1;
 
