@@ -952,10 +952,31 @@ function aiRecruit(owner){
   else formUnitAt(preferred,capital.id,owner);
 }
 
+function aiPrepareArmy(a){
+  const s=getSet(a.at);
+  if(!s||s.owner!==a.owner)return;
+  const need=Math.max(0,requiredLaborers(a)-a.laborers);
+  if(need>0){
+    let left=need;
+    const slaves=Math.min(left,s.pop.slave);s.pop.slave-=slaves;left-=slaves;
+    const clans=Math.min(left,s.pop.clan);s.pop.clan-=clans;left-=clans;
+    const got=need-left;
+    a.laborers+=got;
+    a.laborMix.slave=(a.laborMix.slave||0)+slaves;
+    a.laborMix.clan=(a.laborMix.clan||0)+clans;
+  }
+  if(!a.commander){
+    const c=state.characters.find(function(ch){
+      return ch.faction===a.owner&&ch.alive&&!charAssignedArmy(ch.id)&&!charAssignedSettlement(ch.id);
+    });
+    if(c)a.commander=c.id;
+  }
+}
 function chooseAiAction(owner){
   const armies=state.armies.filter(function(a){return a.owner===owner&&armyMen(a)>100;});
   if(!armies.length)return null;
   let a=armies.sort(function(x,y){return armyPower(y)-armyPower(x);})[0];
+  aiPrepareArmy(a);
   const s=getSet(a.at);
   const targets=s.roads.map(getSet).filter(function(n){
     if(n.owner===owner)return false;
