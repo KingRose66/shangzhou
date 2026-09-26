@@ -67,6 +67,7 @@ for(const factionId of playable){
         assert(Number.isFinite(v), factionId+" non-finite city value at "+city.id);
         assert(v>=0, factionId+" negative city value at "+city.id);
       }
+      assert(Number.isFinite(city.control)&&city.control>=0&&city.control<=100, factionId+" invalid local control at "+city.id);
     }
     for(const [id,f] of Object.entries(s.factions)){
       assert(Number.isFinite(f.shells)&&f.shells>=0, factionId+" invalid shells for "+id);
