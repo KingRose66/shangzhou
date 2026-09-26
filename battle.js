@@ -114,7 +114,7 @@
           men:u.men,maxMen:u.men,
           morale:Math.min(95,(u.morale || def.morale) + (commander ? Math.round((commander.command-50)*.18) : 0)),
           order:def.order, fatigue:4,
-          melee:def.melee, missile:def.missile, armor:def.armor, speed:def.speed,
+          melee:def.melee, missile:def.missile, range:def.range||0, armor:def.armor, speed:def.speed,
           width:bw,height:bh, routed:false, engaged:false,
           attackCd:Math.random()*.8, missileCd:Math.random()*1.5,
           moving:false, lastMoveSpeed:0, isAttacker
@@ -147,6 +147,7 @@
       }
       if(t==="rampart") return .30;
       if(t==="ditch") return .36;
+      if(u.type==="hunter" && (t==="forest"||t==="hill")) return .95;
       if(t==="hill") return .83;
       if(t==="forest") return .72;
       if(t==="mud") return .68;
@@ -212,7 +213,7 @@
           if(u.type==="chariot" && e.type==="archer") d*=.7;
           if(d<best){best=d;target=e}
         }
-        if(u.missile>0 && best<185 && best>72){
+        if(u.missile>0 && best<Math.max(80,u.range-5) && best>Math.min(72,u.range*.42)){
           u.targetEnemy=null;u.tx=null;u.ty=null;
         }else{
           u.targetEnemy=target;
@@ -242,7 +243,7 @@
             ranged=enemies.reduce((a,b)=>Math.hypot(a.x-u.x,a.y-u.y)<Math.hypot(b.x-u.x,b.y-u.y)?a:b);
           }
           const d=Math.hypot(ranged.x-u.x,ranged.y-u.y);
-          if(d<190 && d>65){
+          if(d<u.range && d>Math.min(65,u.range*.48)){
             if(u.missileCd<=0){this.rangedAttack(u,ranged);u.missileCd=2.1+Math.random()*.8}
             return;
           }
