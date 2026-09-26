@@ -19,3 +19,5 @@ jobs:
         run: npm install --no-save jsdom@24
       - name: Browser DOM smoke test
         run: node scripts/browser-smoke.mjs
+      - name: Multi-year campaign soak test
+        run: node scripts/campaign-soak.mjs
