@@ -373,15 +373,44 @@
         c.globalAlpha=u.routed?.5:1;
         c.fillStyle=color;
         if(u.type==="chariot"){
-          c.fillRect(-u.width/2,-u.height/2,u.width,u.height);
-          c.strokeStyle="#2a2118";c.lineWidth=3;
-          c.beginPath();c.arc(-15,14,7,0,Math.PI*2);c.arc(15,14,7,0,Math.PI*2);c.stroke();
+          // Stylized two-horse chariot: readable at tactical zoom without pretending to be archaeological reconstruction.
+          c.fillRect(-18,-8,36,16);
+          c.strokeStyle="#2a2118";c.lineWidth=2.4;
+          c.beginPath();c.arc(-12,11,6,0,Math.PI*2);c.arc(12,11,6,0,Math.PI*2);c.stroke();
+          c.fillStyle=u.side==="player"?"#c8b276":"#693028";
+          c.beginPath();c.moveTo(18,-7);c.lineTo(31,-13);c.lineTo(29,-2);c.closePath();c.fill();
+          c.beginPath();c.moveTo(18,5);c.lineTo(32,1);c.lineTo(29,11);c.closePath();c.fill();
+          c.strokeStyle="#39291b";c.lineWidth=1.4;
+          c.beginPath();c.moveTo(14,-3);c.lineTo(30,-8);c.moveTo(14,3);c.lineTo(30,6);c.stroke();
         }else{
-          c.fillRect(-u.width/2,-u.height/2,u.width*frac,u.height);
-          c.strokeStyle="#2d251d";c.strokeRect(-u.width/2,-u.height/2,u.width,u.height);
+          c.fillStyle="rgba(35,28,20,.42)";
+          c.fillRect(-u.width/2,-u.height/2,u.width,u.height);
+          c.strokeStyle="#2d251d";c.lineWidth=1;c.strokeRect(-u.width/2,-u.height/2,u.width,u.height);
+          const cols=5,rows=3,total=Math.max(1,Math.round(cols*rows*frac));
+          let drawn=0;
+          for(let ry=0;ry<rows;ry++){
+            for(let rx=0;rx<cols;rx++){
+              if(drawn++>=total)break;
+              const sx=-u.width/2+6+rx*7.3,sy=-u.height/2+6+ry*8.5;
+              c.fillStyle=color;c.beginPath();c.arc(sx,sy,2.5,0,Math.PI*2);c.fill();
+              c.strokeStyle=u.side==="player"?"#f0dfac":"#d8a49a";c.lineWidth=.8;
+              if(u.type==="archer"){
+                c.beginPath();c.arc(sx+2,sy+3,4,-1.4,1.4);c.stroke();
+              }else if(u.type==="bronze_spear"){
+                c.beginPath();c.moveTo(sx+2,sy+3);c.lineTo(sx+8,sy-4);c.stroke();
+              }else if(u.type==="bronze_ge"||u.type==="royal_guard"){
+                c.beginPath();c.moveTo(sx+1,sy+3);c.lineTo(sx+6,sy-4);c.moveTo(sx+4,sy-2);c.lineTo(sx+8,sy);c.stroke();
+              }else{
+                c.beginPath();c.moveTo(sx+1,sy+3);c.lineTo(sx+5,sy-2);c.stroke();
+              }
+            }
+          }
         }
         if(u.selected){c.strokeStyle="#fff1b5";c.lineWidth=3;c.strokeRect(-u.width/2-4,-u.height/2-4,u.width+8,u.height+8)}
-        if(u.routed){c.fillStyle="#2b1d17";c.font="12px sans-serif";c.fillText("溃", -5,4)}
+        c.fillStyle="rgba(25,18,12,.85)";c.font="10px sans-serif";c.textAlign="center";
+        c.fillText(GAME_DATA.units[u.type].short,u.type==="chariot"?0:0,u.height/2+14);
+        c.textAlign="start";
+        if(u.routed){c.fillStyle="#2b1d17";c.font="bold 13px sans-serif";c.fillText("溃", -5,4)}
         c.restore();
 
         c.fillStyle="#241a12";c.fillRect(u.x-22,u.y-24,44,4);
