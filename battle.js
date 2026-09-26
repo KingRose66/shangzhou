@@ -201,7 +201,11 @@
           if(u.type==="chariot" && e.type==="archer") d*=.7;
           if(d<best){best=d;target=e}
         }
-        u.targetEnemy=target;
+        if(u.missile>0 && best<185 && best>72){
+          u.targetEnemy=null;u.tx=null;u.ty=null;
+        }else{
+          u.targetEnemy=target;
+        }
       }
     }
 
@@ -229,7 +233,7 @@
           const d=Math.hypot(ranged.x-u.x,ranged.y-u.y);
           if(d<190 && d>65){
             if(u.missileCd<=0){this.rangedAttack(u,ranged);u.missileCd=2.1+Math.random()*.8}
-            if(!target) return;
+            return;
           }
         }
 
