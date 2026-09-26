@@ -715,6 +715,16 @@ function moveArmy(a,targetId,after){
     if(after)after();
   }
 }
+function tryLearnTech(receiver,source,reason,chance){
+  const rf=faction(receiver),sf=faction(source);
+  if(!rf||!sf)return null;
+  const candidates=sf.tech.filter(function(id){return !rf.tech.includes(id)&&DATA.techs[id];});
+  if(!candidates.length||Math.random()>chance)return null;
+  const id=candidates[Math.floor(Math.random()*candidates.length)];
+  rf.tech.push(id);
+  if(receiver===state.player)addLog(reason+"，我方吸收技艺："+DATA.techs[id].name+"。","good");
+  return id;
+}
 function occupySettlement(a,city){
   const old=city.owner;
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
@@ -722,6 +732,7 @@ function occupySettlement(a,city){
   delete state.governors[city.id];
   delete state.sieges[city.id];
   faction(a.owner).prestige+=2;
+  if(city.forge>0)tryLearnTech(a.owner,old,"接收"+city.name+"的作坊与工匠",Math.min(.48,.16+city.forge*.10));
   addLog(city.name+"在无成建制守军情况下屈服于"+ownerName(a.owner)+"；约 "+capt+" 人被编为奴隶/俘口。","good");
   if(old===state.player)addLog("失去聚落 "+city.name+"。","bad");
   checkVictory();
@@ -1187,6 +1198,7 @@ function foreignGrainTrade(){
   const dest=ownedSettlements().sort(function(a,b){return a.grain-b.grain;})[0];
   f.shells-=price;faction(other).shells+=price;src.grain-=amount;dest.grain+=amount;
   changeRelation(state.player,other,2);
+  tryLearnTech(state.player,other,"商旅与随行工匠往来",.10);
   addLog("与"+ownerName(other)+"交易，以 "+price+" 贝购得 "+amount+" 石粮，运往"+dest.name+"。","good");render();
 }
 function demandTribute(){
