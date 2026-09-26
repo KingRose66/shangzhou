@@ -12,7 +12,7 @@ const DATA = {
     {id:"jinnan",name:"晋南据点",owner:"shang",x:55,y:48,pop:{clan:5400,slave:1700},grain:4100,fodder:1800,bronze:190,weapons:{wood:650,bow:130,ge:105,spear:55,chariot:5},farm:60,forge:1,roads:["yin","taihang","crossing","gaodi"]},
     {id:"crossing",name:"黄河渡口邑",owner:"neutral",x:45,y:52,pop:{clan:3200,slave:850},grain:2500,fodder:1200,bronze:80,weapons:{wood:400,bow:80,ge:40,spear:25,chariot:1},farm:52,forge:0,roads:["jinnan","zhouyuan","gaodi"]},
     {id:"gaodi",name:"寨沟高地中心",owner:"gaodi",x:42,y:33,pop:{clan:7600,slave:1800},grain:3500,fodder:3700,bronze:260,weapons:{wood:1000,bow:230,ge:120,spear:65,chariot:7},farm:43,forge:1,roads:["jinnan","crossing","zhouyuan"]},
-    {id:"zhouyuan",name:"周原",owner:"zhou",x:29,y:57,capital:true,pop:{clan:17200,slave:5300},grain:10400,fodder:3900,bronze:510,weapons:{wood:1800,bow:320,ge:230,spear:160,chariot:13},farm:86,forge:2,roads:["crossing","gaodi","weis"]},
+    {id:"zhouyuan",name:"周原",owner:"zhou",x:29,y:57,capital:true,pop:{clan:17200,slave:5300},grain:10400,fodder:3900,bronze:510,weapons:{wood:1800,bow:320,ge:230,spear:160,chariot:13},farm:86,forge:2,roads:["crossing","gaodi","weis","west"]},
     {id:"weis",name:"渭水东部邑",owner:"zhou",x:37,y:68,pop:{clan:7800,slave:2100},grain:6200,fodder:2100,bronze:140,weapons:{wood:880,bow:120,ge:80,spear:55,chariot:3},farm:90,forge:0,roads:["zhouyuan"]},
     {id:"west",name:"西部诸邑",owner:"neutral",x:17,y:48,pop:{clan:4100,slave:800},grain:2700,fodder:2600,bronze:90,weapons:{wood:520,bow:110,ge:35,spear:25,chariot:2},farm:48,forge:0,roads:["zhouyuan"]},
   ],
@@ -201,7 +201,7 @@ function battle(a,b){
   addLog(`${winner.name}击溃${loser.name}。败军大量溃散而非全员战死。`);
   if(armyMen(loser)<80){state.armies=state.armies.filter(x=>x.id!==loser.id);addLog(`${loser.name}失去组织，残部四散。`)}
   if(winner.owner===a.owner && getSet(a.at).owner!==a.owner){
-    const city=getSet(a.at);const capt=Math.round(city.pop.slave*.08+city.pop.clan*.015);city.pop.slave+=capt;city.pop.clan=Math.max(0,city.pop.clan-capt);city.owner=a.owner;
+    const city=getSet(a.at);const capt=Math.min(city.pop.clan,Math.round(city.pop.clan*.025));city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
     addLog(`${city.name}屈服于${ownerName(a.owner)}，战后获得约${capt}名奴隶/俘口。`);
   }
 }
