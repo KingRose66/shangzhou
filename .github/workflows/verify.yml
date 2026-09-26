@@ -15,3 +15,7 @@ jobs:
           node-version: 22
       - name: Static game verification
         run: node scripts/verify.mjs
+      - name: Install smoke-test DOM
+        run: npm install --no-save jsdom@24
+      - name: Browser DOM smoke test
+        run: node scripts/browser-smoke.mjs
