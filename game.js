@@ -337,9 +337,9 @@ function renderCharacters(){
   }).join("");
 }
 
-function routeLine(a,b,map,blocked){
+function routeLine(a,b,map,blocked,supply){
   const r=document.createElement("div"),dx=b.x-a.x,dy=b.y-a.y;
-  r.className="route"+(blocked?" blocked":"");
+  r.className="route"+(blocked?" blocked":"")+(supply?" supply-route":"");
   r.style.left=a.x+"%";r.style.top=a.y+"%";
   r.style.width=Math.hypot(dx/100*map.clientWidth,dy/100*map.clientHeight)+"px";
   r.style.transform="rotate("+Math.atan2(dy/100*map.clientHeight,dx/100*map.clientWidth)*180/Math.PI+"deg)";
@@ -381,13 +381,19 @@ function renderTerrainBackdrop(map){
 function renderMap(){
   const map=$("#map");map.innerHTML="";
   renderTerrainBackdrop(map);
+  const selectedSupplyEdges=new Set();
+  const selectedSupplyArmy=getArmy(state.selectedArmy);
+  if(selectedSupplyArmy&&selectedSupplyArmy.owner===state.player){
+    const p=selectedSupplyArmy.supplyPath||[];
+    for(let i=0;i<p.length-1;i++)selectedSupplyEdges.add([p[i],p[i+1]].sort().join("-"));
+  }
   const seen=new Set();
   state.settlements.forEach(function(a){
     a.roads.forEach(function(id){
       const b=getSet(id),key=[a.id,b.id].sort().join("-");
       if(!seen.has(key)){
         seen.add(key);
-        routeLine(a,b,map,nodeBlocked(a.id,state.player)||nodeBlocked(b.id,state.player));
+        routeLine(a,b,map,nodeBlocked(a.id,state.player)||nodeBlocked(b.id,state.player),selectedSupplyEdges.has(key));
       }
     });
   });
@@ -611,6 +617,8 @@ function renderArmyDetail(){
     return '<div class="unit-row"><span>'+DATA.units[u.type].name+'</span><b>'+fmt(u.men)+'</b></div>';
   }).join("");
   const path=(a.supplyPath||[]).map(function(id){return getSet(id).name;}).join(" → ");
+  const sourceId=(a.supplyPath||[]).length?a.supplyPath[a.supplyPath.length-1]:null;
+  const supplySource=sourceId?getSet(sourceId):null;
   const quarterlyUse=Math.max(1,armyMen(a)*.022+a.laborers*.009);
   const endurance=a.grain/quarterlyUse;
   const siege=state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id?state.sieges[a.at]:null;
@@ -626,7 +634,7 @@ function renderArmyDetail(){
     '<div class="army-orders"><label>统军将领</label><select id="commander-select">'+options+'</select></div>'+
     '<div class="unit-list">'+rows+'</div>'+
     '<p class="small">仅按随军粮估算可维持约 <b>'+endurance.toFixed(1)+' 季</b>（粮道补给未计入）。</p>'+
-    '<p class="small muted">粮道：'+(path||"无可用路径")+'</p>'+
+    '<p class="small muted">粮道：'+(path||"无可用路径")+(supplySource?' · 后方来源 '+supplySource.name:'')+'</p>'+
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
   const marchTarget=getSet(state.selectedSettlement);
@@ -792,19 +800,32 @@ function mergeArmies(){
 
 function supplyPathFor(a){
   const owner=a.owner;
+  const minimum=Math.max(60,armyMen(a)*.08);
   const q=[{id:a.at,path:[a.at]}],visited=new Set([a.at]);
+  let fallback=null;
+
   while(q.length){
     const cur=q.shift(),s=getSet(cur.id);
-    if(cur.id!==a.at&&s.owner===owner&&!nodeBlocked(cur.id,owner))return cur.path;
-    if(cur.id===a.at&&s.owner===owner&&!nodeBlocked(cur.id,owner))return cur.path;
+    const friendly=s&&s.owner===owner&&!nodeBlocked(cur.id,owner);
+
+    if(friendly){
+      if(s.grain>=minimum||s.fodder>=120)return cur.path;
+      if(!fallback&&(s.grain>0||s.fodder>0))fallback=cur.path;
+    }
+
     for(const nid of s.roads){
       if(visited.has(nid)||nodeBlocked(nid,owner))continue;
       const n=getSet(nid);
-      if(n.owner!==owner&&nid!==a.at)continue;
-      visited.add(nid);q.push({id:nid,path:cur.path.concat([nid])});
+      if(!n)continue;
+
+      // An army may reach its own network from a hostile current node,
+      // but supply cannot be traced through a chain of unconquered enemy nodes.
+      if(n.owner!==owner)continue;
+      visited.add(nid);
+      q.push({id:nid,path:cur.path.concat([nid])});
     }
   }
-  return null;
+  return fallback;
 }
 function refreshAllSupply(){
   if(!state)return;
@@ -812,7 +833,7 @@ function refreshAllSupply(){
     const path=supplyPathFor(a);
     a.supplyPath=path||[];
     if(!path)a.supplyState="中断";
-    else if(path.length<=2)a.supplyState="畅通";
+    else if(path.length<=3)a.supplyState="畅通";
     else a.supplyState="危险";
   });
 }
@@ -1240,13 +1261,25 @@ function consumeArmies(){
 
     const s=getSet(a.at);
     if(a.supplyState!=="中断"){
-      const source=(a.supplyPath||[]).map(getSet).find(function(x){return x&&x.owner===a.owner&&x.grain>0;})||s;
-      if(source&&source.owner===a.owner){
-        const need=Math.max(0,men*.22-a.grain);
+      const path=a.supplyPath||[];
+      const source=path.length?getSet(path[path.length-1]):null;
+      let need=Math.max(0,men*.22-a.grain);
+      let fodderNeed=Math.max(0,220-a.fodder);
+
+      // Draw local stores first if the army stands in a friendly settlement.
+      if(s&&s.owner===a.owner){
+        const localTake=Math.min(s.grain,need);
+        s.grain-=localTake;a.grain+=localTake;need-=localTake;
+        const localFodder=Math.min(s.fodder,fodderNeed);
+        s.fodder-=localFodder;a.fodder+=localFodder;fodderNeed-=localFodder;
+      }
+
+      // Remaining requirement is abstracted as being carried along the highlighted supply road.
+      if(source&&source.owner===a.owner&&source.id!==s.id){
         const take=Math.min(source.grain,need);
-        source.grain-=take;a.grain+=take;
-        const fn=Math.max(0,220-a.fodder),ft=Math.min(source.fodder,fn);
-        source.fodder-=ft;a.fodder+=ft;
+        source.grain-=take;a.grain+=take;need-=take;
+        const ft=Math.min(source.fodder,fodderNeed);
+        source.fodder-=ft;a.fodder+=ft;fodderNeed-=ft;
       }
     }
 
