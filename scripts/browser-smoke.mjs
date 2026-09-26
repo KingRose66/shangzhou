@@ -53,6 +53,8 @@ window.document.querySelector("#btn-load").click();
 
 const dateBefore=window.document.querySelector("#hud-date").textContent;
 window.document.querySelector("#btn-end-turn").click();
+let guard=0;
+while(window.SHANGZHOU_DEBUG.hasPendingEncounter()&&guard++<12)window.SHANGZHOU_DEBUG.autoPendingEncounter();
 const dateAfter=window.document.querySelector("#hud-date").textContent;
 assert(dateBefore!==dateAfter,"end turn did not advance date");
 
