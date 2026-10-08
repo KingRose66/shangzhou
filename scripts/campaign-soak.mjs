@@ -57,8 +57,10 @@ for(const factionId of playable){
     let encounterGuard=0;
     while(window.SHANGZHOU_DEBUG.hasPendingEncounter()&&encounterGuard++<20){
       window.SHANGZHOU_DEBUG.autoPendingEncounter();
+      if(window.SHANGZHOU_DEBUG.hasPendingBattleReport())window.SHANGZHOU_DEBUG.closeBattleReport();
     }
     assert(encounterGuard<20,factionId+" encounter resolution loop did not settle");
+    if(window.SHANGZHOU_DEBUG.hasPendingBattleReport())window.SHANGZHOU_DEBUG.closeBattleReport();
     let eventGuard=0;
     while(window.SHANGZHOU_DEBUG.hasPendingWorldEvent()&&eventGuard++<10){
       window.SHANGZHOU_DEBUG.resolveWorldEvent(0);
