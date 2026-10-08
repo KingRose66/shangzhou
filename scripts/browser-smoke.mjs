@@ -34,6 +34,7 @@ const assert=(ok,msg)=>{if(!ok)throw new Error(msg);};
 const playable=["shang","zhou","gaodi","dongfang","jianghan","wucheng","shu"];
 for (const factionId of playable) {
   window.document.querySelector('[data-faction-choice="'+factionId+'"]').click();
+  if(window.SHANGZHOU_DEBUG.hasPendingWorldEvent())window.SHANGZHOU_DEBUG.resolveWorldEvent(0);
   assert(window.document.querySelector("#hud-faction").textContent.trim().length>0,"failed to start "+factionId);
   assert(window.document.querySelectorAll(".node").length===window.GAME_DATA.settlements.length,"map node count mismatch for "+factionId);
   const ownArmyCards=window.document.querySelectorAll(".army-card").length;
@@ -42,6 +43,7 @@ for (const factionId of playable) {
 }
 
 window.document.querySelector('[data-faction-choice="shang"]').click();
+if(window.SHANGZHOU_DEBUG.hasPendingWorldEvent())window.SHANGZHOU_DEBUG.resolveWorldEvent(0);
 
 // Remote foreign settlements should not expose omniscient information.
 assert(window.SHANGZHOU_DEBUG.intelLevel("wucheng")===0,"remote intelligence should begin unknown for Shang");
