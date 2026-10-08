@@ -7,11 +7,38 @@ const terrainNames = {plain:"平原",hill:"丘陵",rolling:"缓丘",river:"河�
 let state = null;
 let turnBusy = false;
 let pendingEncounter = null;
+let pendingWorldEvent = null;
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
 function getArmy(id){ return state.armies.find(function(a){return a.id===id;}); }
 function getChar(id){ return state.characters.find(function(c){return c.id===id;}); }
+function charRelationKey(a,b){return [a,b].sort().join("|");}
+function charRelation(a,b){
+  if(!a||!b||a===b)return 100;
+  const key=charRelationKey(a,b);
+  return typeof state.characterRelations[key]==="number"?state.characterRelations[key]:35;
+}
+function changeCharRelation(a,b,d){
+  if(!a||!b||a===b)return;
+  const key=charRelationKey(a,b);
+  state.characterRelations[key]=Math.max(-100,Math.min(100,charRelation(a,b)+d));
+}
+function characterAvailable(c){
+  return !!(c&&c.alive&&state.characterStatus[c.id]!=="detained");
+}
+function currentRulerCharacter(owner){
+  const f=faction(owner);
+  return state.characters.find(function(c){return c.faction===owner&&c.alive&&c.name===f.ruler;})||null;
+}
+function characterLoyalty(c){
+  if(!c||!c.alive)return 0;
+  const ruler=currentRulerCharacter(c.faction);
+  if(!ruler||ruler.id===c.id)return 100;
+  let value=52+charRelation(c.id,ruler.id)*.42+(c.prestige-ruler.prestige)*.06;
+  if(state.characterStatus[c.id]==="detained")value-=45;
+  return Math.max(0,Math.min(100,Math.round(value)));
+}
 function faction(id){ return state.factions[id]; }
 function ownerName(id){ return faction(id) ? faction(id).name : id; }
 function pairKey(a,b){ return [a,b].sort().join("|"); }
@@ -174,10 +201,7 @@ function traitEffectText(c){
   };
   return effects[c.trait]||"人物特质将影响其最擅长的职责";
 }
-function factionRulerCharacter(owner){
-  const f=faction(owner);
-  return state.characters.find(function(c){return c.faction===owner&&c.name===f.ruler&&c.alive;})||null;
-}
+function factionRulerCharacter(owner){ return currentRulerCharacter(owner); }
 function terrainBattleFactor(army,settlement,attacking){
   const t=settlement.terrain;
   let f=1;
@@ -255,6 +279,10 @@ function freshState(player){
     tribute:{},
     sieges:{},
     governors:{yin:"shang_steward",zhouyuan:"zhou_steward"},
+    characterRelations:Object.fromEntries((DATA.relationshipSeeds||[]).map(function(r){return [[r.a,r.b].sort().join("|"),r.value];})),
+    characterStatus:{},
+    eventFlags:{},
+    eventCooldown:0,
     intel:{},
     tick:0,
     selectedSettlement:(DATA.settlements.find(function(s){return s.owner===player&&s.capital;})||DATA.settlements.find(function(s){return s.owner===player;})).id,
@@ -333,10 +361,11 @@ function renderFaction(){
 function renderCharacters(){
   const chars=state.characters.filter(function(c){return c.faction===state.player&&c.alive;});
   $("#characters").innerHTML=chars.map(function(c){
-    const army=charAssignedArmy(c.id),gov=charAssignedSettlement(c.id);
+    const army=charAssignedArmy(c.id),gov=charAssignedSettlement(c.id),loyalty=characterLoyalty(c),status=state.characterStatus[c.id];
     return '<div class="char-card">'+
       '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+'</span>'+
-      '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+'</div>'+
+      '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+' · 忠诚 '+loyalty+'</div>'+
+      (status?'<div class="small warning">状态：'+(status==="detained"?"被拘留":status)+'</div>':'')+
       '<div class="small"><b>'+c.trait+'</b>：'+traitEffectText(c)+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
     '</div>';
   }).join("");
@@ -536,7 +565,7 @@ function renderSettlement(){
   const pop=s.pop.clan+s.pop.slave;
   const foodTurns=s.grain/Math.max(1,pop*.012);
   const governor=getChar(state.governors[s.id]);
-  const govOptions='<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&c.alive;}).map(function(c){
+  const govOptions='<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&characterAvailable(c);}).map(function(c){
     return '<option value="'+c.id+'" '+(state.governors[s.id]===c.id?"selected":"")+'>'+c.name+'（治政 '+c.admin+'）</option>';
   }).join("");
   $("#settlement-detail").innerHTML=
@@ -614,7 +643,7 @@ function renderArmyDetail(){
     $("#btn-assault").disabled=true;
     return;
   }
-  const available=state.characters.filter(function(c){return c.faction===state.player&&c.alive;});
+  const available=state.characters.filter(function(c){return c.faction===state.player&&characterAvailable(c);});
   const options='<option value="">未任命</option>'+available.map(function(c){
     return '<option value="'+c.id+'" '+(a.commander===c.id?"selected":"")+'>'+c.name+'（统御 '+c.command+'）</option>';
   }).join("");
@@ -673,6 +702,10 @@ function assignCommander(armyId,charId){
     removeGovernorAssignments(charId);
   }
   a.commander=charId||null;
+  if(charId){
+    const ruler=currentRulerCharacter(state.player);
+    if(ruler)changeCharRelation(charId,ruler.id,2);
+  }
   addLog(a.name+(charId?"任命 "+getChar(charId).name+" 为统军将领。":"暂不设主将。"));
   render();
 }
@@ -685,6 +718,8 @@ function assignGovernor(settlementId,charId){
     if(army)army.commander=null;
     removeGovernorAssignments(charId);
     state.governors[settlementId]=charId;
+    const ruler=currentRulerCharacter(state.player);
+    if(ruler)changeCharRelation(charId,ruler.id,2);
     addLog("任命 "+getChar(charId).name+" 主政 "+s.name+"。");
   }else{
     delete state.governors[settlementId];
@@ -1360,7 +1395,7 @@ function aiPrepareArmy(a){
   }
   if(!a.commander){
     const c=state.characters.find(function(ch){
-      return ch.faction===a.owner&&ch.alive&&!charAssignedArmy(ch.id)&&!charAssignedSettlement(ch.id);
+      return ch.faction===a.owner&&characterAvailable(ch)&&!charAssignedArmy(ch.id)&&!charAssignedSettlement(ch.id);
     });
     if(c)a.commander=c.id;
   }
