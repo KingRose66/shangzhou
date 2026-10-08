@@ -300,6 +300,7 @@ function startGame(player){
   state.selectedArmy=first?first.id:null;
   refreshAllSupply();
   $("#newgame-overlay").classList.remove("show");
+  $("#campaign-end-overlay").classList.remove("show");
   render();
 }
 
@@ -1985,6 +1986,24 @@ function playerDeclareWar(){
   declareWar(state.player,other,true);render();
 }
 
+function finishCampaign(victory,title,body){
+  if(state.gameOver)return;
+  state.gameOver=true;
+  const f=faction(state.player),t=totals();
+  const subjects=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
+  $("#campaign-end-eyebrow").textContent=victory?"战役胜利":"战役失败";
+  $("#campaign-end-title").textContent=title;
+  $("#campaign-end-body").innerHTML=body;
+  $("#campaign-end-stats").innerHTML=
+    '<div><span>历时</span><b>'+Math.max(1,state.tick)+' 季</b></div>'+
+    '<div><span>控制聚落</span><b>'+ownedSettlements().length+'</b></div>'+
+    '<div><span>稳固聚落</span><b>'+securedSettlementCount(state.player)+'</b></div>'+
+    '<div><span>贡纳势力</span><b>'+subjects+'</b></div>'+
+    '<div><span>威望</span><b>'+f.prestige+'</b></div>'+
+    '<div><span>总人口</span><b>'+fmt(t.clan+t.slave)+'</b></div>';
+  addLog((victory?"战役胜利：":"战役失败：")+title,victory?"good":"bad");
+  $("#campaign-end-overlay").classList.add("show");
+}
 function checkVictory(){
   if(state.gameOver)return;
   const own=ownedSettlements(state.player);
@@ -1992,28 +2011,24 @@ function checkVictory(){
   const playerCapital=DATA.settlements.find(function(s){return s.owner===state.player&&s.capital;});
   const capNow=playerCapital?getSet(playerCapital.id):null;
   if(capNow&&capNow.owner!==state.player){
-    state.gameOver=true;
-    notice("你的核心都邑已经失守。当前测试局结束。","战役失败");
+    finishCampaign(false,"核心都邑失守","你的核心都邑已经落入敌手，维系这个政体的宗族、贡纳与军事网络随之崩解。");
     return;
   }
   const tributeCount=Object.keys(state.tribute).filter(function(k){return state.tribute[k]===state.player;}).length;
   if(state.player==="shang"){
     const zhouCap=getSet("zhouyuan");
     if((tributeCount>=3&&faction(state.player).prestige>=110)||(zhouCap&&zhouCap.owner===state.player&&secured>=8)){
-      state.gameOver=true;
-      notice("大邑商重新建立了足以覆盖四方的霸权网络。","战役胜利");
+      finishCampaign(true,"四方复服","大邑商重新建立了足以覆盖四方的贡纳与军事网络。胜利来自威望、服属关系与稳定控制，而不只是把整张地图染成一种颜色。");
     }
   }else if(state.player==="zhou"){
     const yin=getSet("yin");
     if(yin&&yin.owner===state.player&&secured>=8){
-      state.gameOver=true;
-      notice("周已夺取大邑商核心，并形成新的区域统治网络。","战役胜利");
+      finishCampaign(true,"周势代兴","周已夺取大邑商核心，并形成足以支撑新秩序的区域统治网络。");
     }
   }else{
     const yin=getSet("yin");
     if((yin&&yin.owner===state.player)||(secured>=7&&faction(state.player).prestige>=90&&tributeCount>=1)){
-      state.gameOver=true;
-      notice("你的政体已经成长为足以改变四方秩序的区域霸权。","战役胜利");
+      finishCampaign(true,"区域霸权","你的政体已经拥有足够的稳固领地、威望与服属网络，成为能够改变四方秩序的区域霸权。");
     }
   }
 }
@@ -2068,6 +2083,7 @@ function loadGame(){
     state.tick=state.tick||0;
     state.settlements.forEach(function(s){if(typeof s.control!=="number")s.control=100;});
     $("#newgame-overlay").classList.remove("show");
+    $("#campaign-end-overlay").classList.toggle("show",!!state.gameOver);
     refreshAllSupply();addLog("已读取本机存档。","good");render();
   }catch(e){notice("读取失败："+e.message);}
 }
@@ -2089,6 +2105,8 @@ $$("[data-unit]").forEach(function(b){
   b.onclick=function(){recruit(b.dataset.unit);};
 });
 $$("[data-faction-choice]").forEach(function(b){b.onclick=function(){startGame(b.dataset.factionChoice);};});
+$("#campaign-end-view").onclick=function(){$("#campaign-end-overlay").classList.remove("show");};
+$("#campaign-end-new").onclick=function(){$("#campaign-end-overlay").classList.remove("show");showNewGame();};
 $("#btn-end-turn").onclick=endTurn;
 $("#btn-new").onclick=showNewGame;
 $("#btn-help").onclick=showHelp;
