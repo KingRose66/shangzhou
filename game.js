@@ -152,8 +152,12 @@ function hasTech(owner,id){ return !!(faction(owner)&&faction(owner).tech.includ
 function playerOwnsSettlement(id){ const s=getSet(id); return s && s.owner===state.player; }
 function seasonName(){ return DATA.seasons[state.season]; }
 function addLog(text,type){
-  state.log.unshift({text:seasonName()+" · "+text,type:type||"normal"});
+  const entry={year:state.year,season:seasonName(),tick:state.tick||0,text:text,type:type||"normal"};
+  state.log.unshift({text:entry.season+" · "+text,type:entry.type});
   state.log=state.log.slice(0,35);
+  state.chronicle=state.chronicle||[];
+  state.chronicle.unshift(entry);
+  state.chronicle=state.chronicle.slice(0,240);
 }
 function ownedSettlements(owner){
   owner=owner||state.player;
@@ -291,6 +295,7 @@ function freshState(player){
     selectedSettlement:(DATA.settlements.find(function(s){return s.owner===player&&s.capital;})||DATA.settlements.find(function(s){return s.owner===player;})).id,
     selectedArmy:null,
     log:[{text:"春 · 局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
+    chronicle:[{year:-1115,season:"春",tick:0,text:"局势初定：大邑商仍掌握最强的青铜与车战力量，周在西土渐强。",type:"normal"}],
     omen:null,
     omenTurn:-99,
     gameOver:false
@@ -2069,6 +2074,15 @@ function showHelp(){
   );
 }
 
+function showChronicle(){
+  const entries=(state.chronicle||[]).slice(0,120);
+  const html=entries.length?entries.map(function(e){
+    const cls=e.type==="bad"?"bad":e.type==="good"?"good":e.type==="warning"?"warning":"";
+    return '<div class="char-card '+cls+'"><b>约前'+Math.abs(e.year)+'年 · '+e.season+'</b><div>'+e.text+'</div></div>';
+  }).join(""):'<p class="muted">尚无纪事。</p>';
+  notice('<div style="max-height:62vh;overflow:auto;padding-right:6px">'+html+'</div>','战役纪事');
+}
+
 function archive(){
   const html=DATA.archive.map(function(x){
     return '<p><b>'+x.name+'</b> <span class="badge '+x.confidence.toLowerCase()+'">'+x.era+'</span><br><span class="muted">'+x.note+'</span></p>';
@@ -2100,6 +2114,7 @@ function loadGame(){
     state.characterStatus=state.characterStatus||{};
     state.eventFlags=state.eventFlags||{};
     state.eventCooldown=state.eventCooldown||0;
+    state.chronicle=state.chronicle||[];
     state.intel=state.intel||{};
     state.tick=state.tick||0;
     state.settlements.forEach(function(s){if(typeof s.control!=="number")s.control=100;});
@@ -2131,6 +2146,7 @@ $("#campaign-end-new").onclick=function(){$("#campaign-end-overlay").classList.r
 $("#btn-end-turn").onclick=endTurn;
 $("#btn-new").onclick=showNewGame;
 $("#btn-help").onclick=showHelp;
+$("#btn-chronicle").onclick=showChronicle;
 $("#btn-save").onclick=saveGame;
 $("#btn-load").onclick=loadGame;
 $("#btn-clear-army").onclick=function(){state.selectedArmy=null;render();};
