@@ -69,7 +69,11 @@ window.document.querySelector("#btn-load").click();
 const dateBefore=window.document.querySelector("#hud-date").textContent;
 window.document.querySelector("#btn-end-turn").click();
 let guard=0;
-while(window.SHANGZHOU_DEBUG.hasPendingEncounter()&&guard++<12)window.SHANGZHOU_DEBUG.autoPendingEncounter();
+while(window.SHANGZHOU_DEBUG.hasPendingEncounter()&&guard++<12){
+  window.SHANGZHOU_DEBUG.autoPendingEncounter();
+  if(window.SHANGZHOU_DEBUG.hasPendingBattleReport())window.SHANGZHOU_DEBUG.closeBattleReport();
+}
+if(window.SHANGZHOU_DEBUG.hasPendingBattleReport())window.SHANGZHOU_DEBUG.closeBattleReport();
 const dateAfter=window.document.querySelector("#hud-date").textContent;
 assert(dateBefore!==dateAfter,"end turn did not advance date");
 
