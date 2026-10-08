@@ -1828,11 +1828,53 @@ function craftsmenEvent(){
       {label:"不额外支出",detail:"不花贝；交换场仍因商旅停留获得少量收入。",apply:function(){faction(state.player).shells+=35;addLog("工匠没有久留，但商旅往来带来少量贝。");}}
     ]};
 }
+function regionalIdentityEvent(){
+  const id="regional_"+state.player;
+  if(state.eventFlags[id]||state.tick<5)return null;
+  const cap=ownedSettlements().find(function(s){return s.capital;})||ownedSettlements()[0];
+  if(!cap)return null;
+
+  if(state.player==="gaodi"){
+    return {id:id,eyebrow:"晋陕高地 · C级历史复原",title:"牧群与河谷交换",
+      body:"高地牧群进入换季，来自河谷与北方的商旅同时抵达。你可以把牲畜继续留给军队，也可以借这次交换积累贝与粮。",
+      context:"以高地畜牧、山地交通和跨区域交换为玩法依据，不对应单一史实事件。",
+      choices:[
+        {label:"优先储备军需",detail:"草料 +500、牲畜 +45；贝 -80。",apply:function(){faction(state.player).shells=Math.max(0,faction(state.player).shells-80);faction(state.player).livestock+=45;cap.fodder+=500;addLog("高地牧群被集中用于军需储备。","good");}},
+        {label:"开放交换",detail:"贝 +180、粮 +220 石；牲畜 -20。",apply:function(){faction(state.player).shells+=180;faction(state.player).livestock=Math.max(0,faction(state.player).livestock-20);cap.grain+=220;addLog("河谷交换带来贝与粮食。","good");}},
+        {label:"分散给地方族邑",detail:"地方服从 +10、威望 +3。",apply:function(){cap.control=Math.min(100,cap.control+10);faction(state.player).prestige+=3;addLog("牲畜被分给地方族邑，高地联盟更加稳固。","good");}}
+      ]};
+  }
+
+  if(state.player==="dongfang"){
+    return {id:id,eyebrow:"东方诸方 · C级政治复原",title:"族邑盟会",
+      body:"东方各族邑的首领聚集议事。有人愿意增加兵员，有人要求减少征发，也有人建议加强与大邑商的交换。",
+      context:"东方政治结构在游戏中被处理为多族邑联合体，因此核心矛盾是动员与自治之间的平衡。",
+      choices:[
+        {label:"扩大共同军役",detail:"首都木骨兵器 +180，族兵征募成本临时不变；地方服从 -6，威望 +5。",apply:function(){cap.weapons.wood+=180;cap.control=Math.max(0,cap.control-6);faction(state.player).prestige+=5;addLog("东方盟会同意扩大共同军役。","warning");}},
+        {label:"减役稳众",detail:"地方服从 +12，粮 +250 石；威望 -2。",apply:function(){cap.control=Math.min(100,cap.control+12);cap.grain+=250;faction(state.player).prestige=Math.max(1,faction(state.player).prestige-2);addLog("东方诸邑暂减军役，地方生产恢复。","good");}},
+        {label:"以商贸维系联盟",detail:"贝 -100；市场 +1（最高4级），与商关系 +8。",apply:function(){faction(state.player).shells=Math.max(0,faction(state.player).shells-100);cap.market=Math.min(4,cap.market+1);changeRelation(state.player,"shang",8);addLog("东方诸邑以交换网络维系联盟。","good");}}
+      ]};
+  }
+
+  if(["jianghan","wucheng","shu"].includes(state.player)){
+    const title=state.player==="shu"?"成都平原的礼器与工匠":"南方铜料与工艺网络";
+    return {id:id,eyebrow:"南方网络 · B/C级复原",title:title,
+      body:"来自不同河谷的铜料、半成品与工匠正在流动。要不要投入资源，把这次交换转化为本地铸造优势？",
+      context:"晚商时期长江流域、汉中、成都平原与中原之间存在复杂的金属与工艺交流；游戏把这种网络压缩为一次资源与技术选择。",
+      choices:[
+        {label:"集中铜料入库",detail:"贝 -160；首都青铜料 +220。",apply:function(){faction(state.player).shells=Math.max(0,faction(state.player).shells-160);cap.bronze+=220;addLog("大批铜料进入本地作坊体系。","good");}},
+        {label:"留下工匠与制范经验",detail:"贝 -200；若未掌握“外来陶范技法”则获得之，否则戈、矛各 +35。",apply:function(){const f=faction(state.player);f.shells=Math.max(0,f.shells-200);if(!f.tech.includes("improved_mold")){f.tech.push("improved_mold");addLog("工匠留下制范经验：获得外来陶范技法。","good");}else{cap.weapons.ge+=35;cap.weapons.spear+=35;addLog("工匠直接补充了一批青铜兵器。","good");}}},
+        {label:"让商旅自由交换",detail:"贝 +140；市场 +1（最高4级），但青铜不进入国库。",apply:function(){faction(state.player).shells+=140;cap.market=Math.min(4,cap.market+1);addLog("商旅自由交换，本地市场更加繁荣。","good");}}
+      ]};
+  }
+  return null;
+}
+
 function maybeWorldEvent(){
   if(state.gameOver||pendingWorldEvent)return null;
   if((state.eventCooldown||0)>0)state.eventCooldown--;
 
-  const scripted=[huanDroughtEvent(),zhouAscendancyEvent(),jiliCrisisEvent()].filter(Boolean);
+  const scripted=[huanDroughtEvent(),zhouAscendancyEvent(),jiliCrisisEvent(),regionalIdentityEvent()].filter(Boolean);
   if(scripted.length)return scripted[0];
 
   if((state.eventCooldown||0)>0)return null;
