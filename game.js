@@ -303,14 +303,19 @@ function freshState(player){
   };
 }
 
-function startGame(player){
+function startGame(player,options){
   state=freshState(player);
+  pendingEncounter=null;pendingWorldEvent=null;pendingBattleReport=null;turnBusy=false;
   const first=state.armies.find(function(a){return a.owner===player;});
   state.selectedArmy=first?first.id:null;
   refreshAllSupply();
   $("#newgame-overlay").classList.remove("show");
   $("#campaign-end-overlay").classList.remove("show");
+  $("#event-overlay").classList.remove("show");
+  $("#encounter-overlay").classList.remove("show");
+  $("#battle-report-overlay").classList.remove("show");
   render();
+  if(!(options&&options.skipBriefing))showWorldEvent(openingBriefingEvent(player));
 }
 
 function render(){
@@ -1867,6 +1872,22 @@ function craftsmenEvent(){
       {label:"不额外支出",detail:"不花贝；交换场仍因商旅停留获得少量收入。",apply:function(){faction(state.player).shells+=35;addLog("工匠没有久留，但商旅往来带来少量贝。");}}
     ]};
 }
+function openingBriefingEvent(owner){
+  const briefs={
+    shang:{title:"王畿仍强，四方并未静止",body:"你控制着地图上最强的政治与青铜中心，但优势分散在漫长的道路、方国关系和贡纳网络上。不要把“最强”理解成“可以同时向所有方向开战”。",tips:"开局优先检查王师民夫与粮道；维持周的关系或有准备地压制它；东方与高地需要用贡纳、贸易或有限战争分开处理。"},
+    zhou:{title:"西土渐强，尚非决战之时",body:"周的组织能力和人物质量很强，但人口、青铜和现成军力远不及商。你的优势是经营、宗族动员以及选择何时把地方扩张转化为政治挑战。",tips:"先稳住周原与渭水方向；不要让族兵征发长期抽空农业；利用贸易、贡纳与西向扩张积累实力，再决定何时挑战商。"},
+    gaodi:{title:"守山口，握渡口",body:"你的体量不大，但高地、畜牧与黄河通道让强国很难忽视你。把地形变成力量，而不是在平原和商王师比拼正面消耗。",tips:"控制渡口与高地道路；保存草料与机动力；在大国相争时通过贡纳、贸易或侧击扩张。"},
+    dongfang:{title:"东方不是一个整齐的国家",body:"你的统治来自多个族邑的联合。人口和农业条件不错，但动员过度会迅速侵蚀地方服从。",tips:"优先稳住前掌大与海岱；用邑宰和驻军保持服从度；利用山东方向的资源与商的距离争取成长时间。"},
+    jianghan:{title:"河流既是道路，也是边界",body:"江汉拥有南北交通价值，却没有中原大国那样厚重的军事储备。你的优势在于位置和交换网络。",tips:"守住南阳门户；利用河谷贸易积累贝和技艺；避免同时与北方和南方邻国交战。"},
+    wucheng:{title:"南方工艺中心",body:"吴城远离商王畿，青铜工艺是你的长项。弱点是战略纵深有限，必须把工艺优势转化为可持续的兵力和盟友。",tips:"优先发展作坊与市场；争取江汉通道；不要把昂贵青铜兵全部耗在早期攻城。"},
+    shu:{title:"成都平原富庶，但出口狭窄",body:"古蜀拥有较强的人口、农业与青铜潜力，真正的战略问题是如何穿过汉中，把资源投射到更大的网络中。",tips:"把汉中视作第一战略目标；先解决粮道和民夫，再向外扩张；保留青铜与贝用于训练真正能远征的军队。"}
+  };
+  const b=briefs[owner]||briefs.shang;
+  return {id:"opening_briefing",eyebrow:"开局军国简报",title:b.title,body:b.body,
+    context:"<b>建议：</b>"+b.tips,
+    choices:[{label:"开始执政",detail:"关闭简报，进入战略地图。",apply:function(){}}]};
+}
+
 function regionalIdentityEvent(){
   const id="regional_"+state.player;
   if(state.eventFlags[id]||state.tick<5)return null;
@@ -2260,7 +2281,7 @@ $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、�
 
 window.SHANGZHOU_DEBUG={
   getState:function(){return deepCopy(state);},
-  startGame:startGame,
+  startGame:function(id){startGame(id,{skipBriefing:true});},
   endTurn:endTurn,
   intelLevel:function(id){return intelLevel(getSet(id));},
   hasPendingEncounter:function(){return !!pendingEncounter;},
