@@ -1400,30 +1400,82 @@ function aiPrepareArmy(a){
     if(c)a.commander=c.id;
   }
 }
+function aiStrategicScore(owner,s){
+  if(!s||s.owner===owner)return -9999;
+  if(hasMilitaryAccess(owner,s.owner)&&!isAtWar(owner,s.owner))return -9999;
+  let score=0;
+  if(isAtWar(owner,s.owner))score+=70;
+  else if(s.owner==="neutral")score+=34;
+  else if(relation(owner,s.owner)<-20)score+=25;
+  else return -9999;
+
+  if(s.capital)score+=28;
+  score+=(s.pop.clan+s.pop.slave)*.0022+s.market*4+s.forge*5;
+  if(s.wall>0)score-=6*s.wall;
+
+  const priorities={
+    shang:{zhouyuan:18,qianzhangda:12,gaodi:10},
+    zhou:{weis:20,laoniupo:18,gaodi:12,yin:35},
+    gaodi:{crossing:20,jinnan:14,zhouyuan:10},
+    dongfang:{daxinzhuang:18,huaibei:14,yin:16},
+    jianghan:{nanyang:20,hanzhong:10,wucheng:8},
+    wucheng:{jianghan:20,nanyang:12},
+    shu:{hanzhong:25,nanyang:14,zhouyuan:8}
+  };
+  score+=(priorities[owner]&&priorities[owner][s.id])||0;
+  return score;
+}
+function aiPath(owner,startId,targetId){
+  const q=[{id:startId,path:[startId]}],seen=new Set([startId]);
+  while(q.length){
+    const cur=q.shift();
+    if(cur.id===targetId)return cur.path;
+    const s=getSet(cur.id);
+    for(const nid of s.roads){
+      if(seen.has(nid)||nodeBlocked(nid,owner))continue;
+      const n=getSet(nid);
+      if(!n)continue;
+      const pass=nid===targetId||n.owner===owner||hasMilitaryAccess(owner,n.owner);
+      if(!pass)continue;
+      seen.add(nid);q.push({id:nid,path:cur.path.concat([nid])});
+    }
+  }
+  return null;
+}
 function chooseAiAction(owner){
-  const armies=state.armies.filter(function(a){return a.owner===owner&&armyMen(a)>100;});
+  const armies=state.armies.filter(function(a){
+    return a.owner===owner&&armyMen(a)>100&&!(state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id);
+  });
   if(!armies.length)return null;
-  let a=armies.sort(function(x,y){return armyPower(y)-armyPower(x);})[0];
-  aiPrepareArmy(a);
-  const s=getSet(a.at);
-  const targets=s.roads.map(getSet).filter(function(n){
-    if(n.owner===owner)return false;
-    if(isAtWar(owner,n.owner))return true;
-    if(n.owner==="neutral"&&relation(owner,n.owner)<=5)return true;
-    return relation(owner,n.owner)<-20;
-  });
-  if(!targets.length)return null;
-  targets.sort(function(x,y){
-    const xp=(x.owner===state.player?0:250)+(x.capital?-300:0)+(x.pop.clan+x.pop.slave)*.01;
-    const yp=(y.owner===state.player?0:250)+(y.capital?-300:0)+(y.pop.clan+y.pop.slave)*.01;
-    return xp-yp;
-  });
-  const target=targets[0];
-  if(!isAtWar(owner,target.owner))declareWar(owner,target.owner,true);
-  const defender=state.armies.find(function(x){return x.owner!==owner&&x.at===target.id&&armyMen(x)>0;});
-  if(defender&&armyPower(a,target,true)<armyPower(defender,target,false)*1.12)return null;
-  if(a.laborers<requiredLaborers(a)||a.grain<marchCost(a,target).grain)return null;
-  return {armyId:a.id,targetId:target.id};
+
+  const candidates=state.settlements.filter(function(s){return aiStrategicScore(owner,s)>-9000;});
+  if(!candidates.length)return null;
+
+  let best=null;
+  for(const a of armies){
+    aiPrepareArmy(a);
+    for(const target of candidates){
+      const path=aiPath(owner,a.at,target.id);
+      if(!path||path.length<2)continue;
+      const score=aiStrategicScore(owner,target)-(path.length-1)*8+armyPower(a)*.002;
+      if(!best||score>best.score)best={army:a,target:target,path:path,score:score};
+    }
+  }
+  if(!best)return null;
+
+  const a=best.army,target=best.target,next=getSet(best.path[1]);
+  if(!next)return null;
+
+  // War is declared only when the army is actually about to enter the target polity.
+  if(next.owner!==owner&&!hasMilitaryAccess(owner,next.owner)&&!isAtWar(owner,next.owner)){
+    if(next.owner==="neutral"||relation(owner,next.owner)<-20)declareWar(owner,next.owner,true);
+    else return null;
+  }
+
+  const defender=state.armies.find(function(x){return isHostile(owner,x.owner)&&x.at===next.id&&armyMen(x)>0;});
+  if(defender&&armyPower(a,next,true)<armyPower(defender,next,false)*1.08)return null;
+  if(a.laborers<requiredLaborers(a)||a.grain<marchCost(a,next).grain)return null;
+  return {armyId:a.id,targetId:next.id,strategicTargetId:target.id};
 }
 
 function runAiActions(actions,index,done){
