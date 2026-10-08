@@ -170,3 +170,14 @@ dialog::backdrop{background:#0009}
 .campaign-end-stats b{display:block;margin-top:3px}
 .campaign-end-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:620px){.campaign-end-stats{grid-template-columns:1fr 1fr}.campaign-end-actions{grid-template-columns:1fr}}
+
+.battle-report-overlay{z-index:78;background:rgba(9,7,5,.9)}
+.battle-report-card{width:min(620px,94vw);background:linear-gradient(180deg,#2a2118,#18130e);border:1px solid #7d6040;border-radius:11px;padding:24px;box-shadow:0 25px 80px #000b}
+.battle-report-card h2{font-family:Georgia,"Noto Serif SC",serif;font-size:29px;margin:8px 0 15px}
+.battle-report-card #battle-report-body{line-height:1.7}
+.battle-report-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.battle-report-force{padding:11px;background:#1d1812;border:1px solid #493827;border-radius:7px}
+.battle-report-force span{display:block;font-size:10px;color:#9f8e77}
+.battle-report-force b{display:block;margin:3px 0}
+.battle-report-loss{font-size:18px;color:#d4b071}
+.battle-report-card>button{width:100%;margin-top:12px}
