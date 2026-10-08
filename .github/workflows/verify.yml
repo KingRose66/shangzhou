@@ -23,3 +23,5 @@ jobs:
         run: node scripts/campaign-soak.mjs
       - name: Tactical facing and flank logic
         run: node scripts/battle-logic.mjs
+      - name: Character succession and events
+        run: node scripts/character-events.mjs
