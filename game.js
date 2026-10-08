@@ -8,6 +8,7 @@ let state = null;
 let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
+let pendingBattleReport = null;
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -1128,12 +1129,19 @@ function autoPendingEncounter(){
   if(!p)return;
   $("#encounter-overlay").classList.remove("show");
   pendingEncounter=null;
-  autoResolve(p.attacker,p.defender,p.attackerFrom);
-  turnBusy=false;
+  const r=autoResolve(p.attacker,p.defender,p.attackerFrom);
   refreshAllSupply();
   checkVictory();
   render();
-  if(p.after)p.after();
+  if(state.gameOver){turnBusy=false;return;}
+  const playerIsAttacker=p.playerArmy===p.attacker;
+  showBattleReport({
+    playerArmy:p.playerArmy,enemyArmy:p.enemyArmy,winner:r.winner,location:r.location,
+    playerStart:playerIsAttacker?r.attackerStart:r.defenderStart,
+    enemyStart:playerIsAttacker?r.defenderStart:r.attackerStart,
+    playerEnd:playerIsAttacker?r.attackerEnd:r.defenderEnd,
+    enemyEnd:playerIsAttacker?r.defenderEnd:r.attackerEnd
+  },p.after);
 }
 function retreatPendingEncounter(){
   const p=pendingEncounter;
@@ -1158,6 +1166,32 @@ function retreatPendingEncounter(){
   render();
   if(p.after)p.after();
 }
+function showBattleReport(data,continueFn){
+  pendingBattleReport={continueFn:continueFn||null};
+  const won=data.winner===data.playerArmy;
+  $("#battle-report-title").textContent=won?"我军保持战场":"我军退出战场";
+  const pLoss=Math.max(0,data.playerStart-data.playerEnd);
+  const eLoss=Math.max(0,data.enemyStart-data.enemyEnd);
+  $("#battle-report-body").innerHTML=
+    '<p>'+data.location+'一战已经结束。'+(won?"敌军首先失去组织并溃退。":"我军未能继续维持阵线。")+'</p>'+
+    '<div class="battle-report-grid">'+
+      '<div class="battle-report-force"><span>我军 · '+data.playerArmy.name+'</span><b>'+fmt(data.playerEnd)+' / '+fmt(data.playerStart)+' 人</b><div class="battle-report-loss">损失 '+fmt(pLoss)+'</div></div>'+
+      '<div class="battle-report-force"><span>敌军 · '+data.enemyArmy.name+'</span><b>'+fmt(data.enemyEnd)+' / '+fmt(data.enemyStart)+' 人</b><div class="battle-report-loss">损失 '+fmt(eLoss)+'</div></div>'+
+    '</div>'+
+    '<p class="small muted">战后损失包含战场伤亡、溃逃失散以及开阔地追击造成的追加损失；因此不会等同于“阵亡人数”。</p>';
+  $("#battle-report-overlay").classList.add("show");
+}
+function closeBattleReport(){
+  if(!pendingBattleReport)return;
+  const cont=pendingBattleReport.continueFn;
+  pendingBattleReport=null;
+  $("#battle-report-overlay").classList.remove("show");
+  turnBusy=false;
+  refreshAllSupply();
+  render();
+  if(cont)cont();
+}
+
 function syncFromBattle(a,pack){
   pack.forEach(function(p){
     if(a.units[p.sourceIndex]){
@@ -1186,6 +1220,7 @@ function findRetreatNode(army,avoid){
   return candidates[0]||getSet(army.previous||s.id);
 }
 function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,attackerFrom,after){
+  const playerStart=armyMen(playerArmy),enemyStart=armyMen(enemyArmy),locationName=getSet(attacker.at).name;
   syncFromBattle(playerArmy,result.player);
   syncFromBattle(enemyArmy,result.enemy);
   const winner=result.winnerSide==="player"?playerArmy:enemyArmy;
@@ -1210,15 +1245,18 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
   if(winner===attacker&&getSet(attacker.at).owner!==attacker.owner&&isAtWar(attacker.owner,getSet(attacker.at).owner))occupySettlement(attacker,getSet(attacker.at));
   if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
 
-  turnBusy=false;
   refreshAllSupply();
   checkVictory();
   render();
-  if(after)after();
+  if(state.gameOver){turnBusy=false;return;}
+  showBattleReport({
+    playerArmy:playerArmy,enemyArmy:enemyArmy,winner:winner,location:locationName,
+    playerStart:playerStart,enemyStart:enemyStart,playerEnd:armyMen(playerArmy),enemyEnd:armyMen(enemyArmy)
+  },after);
 }
 
 function autoResolve(attacker,defender,attackerFrom){
-  const s=getSet(attacker.at);
+  const s=getSet(attacker.at),attackerStart=armyMen(attacker),defenderStart=armyMen(defender);
   const pa=armyPower(attacker,s,true)*(.9+Math.random()*.2);
   const fort=s.wall?1+s.wall*.08+(hasTech(defender.owner,"fortification")?.15:0):1;
   const pd=armyPower(defender,s,false)*(.9+Math.random()*.2)*fort;
@@ -1238,6 +1276,7 @@ function autoResolve(attacker,defender,attackerFrom){
   }
   if(winner===attacker&&s.owner!==attacker.owner&&isAtWar(attacker.owner,s.owner))occupySettlement(attacker,s);
   if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
+  return {winner:winner,location:s.name,attackerStart:attackerStart,defenderStart:defenderStart,attackerEnd:armyMen(attacker),defenderEnd:armyMen(defender)};
 }
 function damageArmy(a,pct){
   a.units.forEach(function(u){u.men=Math.max(0,Math.round(u.men*(1-pct)));});
@@ -1621,7 +1660,7 @@ function processTribute(){
 }
 
 function endTurn(){
-  if(turnBusy||state.gameOver||pendingWorldEvent)return;
+  if(turnBusy||state.gameOver||pendingWorldEvent||pendingBattleReport)return;
   turnBusy=true;
   processTraining();
   settlementEconomy();
@@ -2132,7 +2171,7 @@ function archive(){
   notice(html,"历代史实人物档案");
 }
 function saveGame(){
-  if(pendingEncounter||pendingWorldEvent)return notice("请先处理当前战斗或军国事件，再保存战局。");
+  if(pendingEncounter||pendingWorldEvent||pendingBattleReport)return notice("请先处理当前战斗、战后军报或军国事件，再保存战局。");
   try{
     localStorage.setItem("shangzhou-save",JSON.stringify(state));
     addLog("战局已保存到本机浏览器。","good");render();
@@ -2207,6 +2246,7 @@ $("#btn-foreign-grain").onclick=foreignGrainTrade;
 $("#btn-demand-tribute").onclick=demandTribute;
 $("#btn-declare-war").onclick=playerDeclareWar;
 $("#btn-peace").onclick=offerPeace;
+$("#battle-report-close").onclick=closeBattleReport;
 $("#encounter-command").onclick=commandPendingEncounter;
 $("#encounter-auto").onclick=autoPendingEncounter;
 $("#encounter-retreat").onclick=retreatPendingEncounter;
@@ -2227,6 +2267,8 @@ window.SHANGZHOU_DEBUG={
   autoPendingEncounter:autoPendingEncounter,
   hasPendingWorldEvent:function(){return !!pendingWorldEvent;},
   resolveWorldEvent:resolveWorldEvent,
+  hasPendingBattleReport:function(){return !!pendingBattleReport;},
+  closeBattleReport:closeBattleReport,
   killCharacter:function(id){handleCharacterDeath(getChar(id),"测试事件");render();},
   loyalty:function(id){return characterLoyalty(getChar(id));},
   forceEvent:function(id){
