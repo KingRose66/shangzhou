@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "1.1.0",
+  version: "1.2.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
@@ -194,10 +194,12 @@ const GAME_DATA = {
 
   characters: [
     {id:"wen_ding",name:"文丁",faction:"shang",role:"商王",age:43,command:78,martial:63,admin:76,intrigue:71,diplomacy:69,ritual:88,prestige:92,trait:"守成威权",alive:true,confidence:"B"},
+    {id:"di_yi",name:"帝乙",faction:"shang",role:"王子",age:24,command:69,martial:57,admin:73,intrigue:67,diplomacy:70,ritual:82,prestige:66,trait:"持重承统",alive:true,confidence:"B"},
     {id:"shang_general",name:"王族子启",faction:"shang",role:"王族将领",age:35,command:73,martial:76,admin:48,intrigue:44,diplomacy:51,ritual:63,prestige:59,trait:"车战娴熟",alive:true,confidence:"C"},
     {id:"shang_steward",name:"卜臣旅",faction:"shang",role:"卜臣",age:39,command:45,martial:38,admin:68,intrigue:66,diplomacy:55,ritual:84,prestige:52,trait:"谨慎占断",alive:true,confidence:"C"},
 
     {id:"jili",name:"季历",faction:"zhou",role:"周君",age:41,command:84,martial:77,admin:75,intrigue:64,diplomacy:73,ritual:69,prestige:72,trait:"西土开拓",alive:true,confidence:"B"},
+    {id:"ji_chang",name:"姬昌",faction:"zhou",role:"公子",age:34,command:78,martial:62,admin:82,intrigue:72,diplomacy:81,ritual:76,prestige:70,trait:"西岐经营",alive:true,confidence:"B"},
     {id:"zhou_general",name:"周宗伯仲",faction:"zhou",role:"宗族将领",age:32,command:70,martial:71,admin:56,intrigue:51,diplomacy:58,ritual:66,prestige:54,trait:"族兵凝聚",alive:true,confidence:"C"},
     {id:"zhou_steward",name:"太史辛",faction:"zhou",role:"史臣",age:46,command:48,martial:37,admin:77,intrigue:63,diplomacy:69,ritual:76,prestige:50,trait:"善治仓廪",alive:true,confidence:"C"},
 
@@ -206,6 +208,20 @@ const GAME_DATA = {
     {id:"jiang_lord",name:"江汉君长",faction:"jianghan",role:"地方君长",age:37,command:67,martial:66,admin:65,intrigue:57,diplomacy:64,ritual:61,prestige:52,trait:"舟陆并用",alive:true,confidence:"C"},
     {id:"wu_lord",name:"南方君长",faction:"wucheng",role:"地方君长",age:42,command:65,martial:62,admin:70,intrigue:59,diplomacy:60,ritual:67,prestige:56,trait:"青铜工艺",alive:true,confidence:"C"},
     {id:"shu_lord",name:"蜀地君长",faction:"shu",role:"地方君长",age:39,command:69,martial:65,admin:72,intrigue:66,diplomacy:58,ritual:78,prestige:68,trait:"古蜀礼器传统",alive:true,confidence:"C"}
+  ],
+
+  successions: {
+    shang:["di_yi"],
+    zhou:["ji_chang"]
+  },
+
+  relationshipSeeds: [
+    {a:"wen_ding",b:"di_yi",value:78,type:"父子",confidence:"B"},
+    {a:"jili",b:"ji_chang",value:82,type:"父子",confidence:"B"},
+    {a:"wen_ding",b:"shang_general",value:48,type:"王族",confidence:"C"},
+    {a:"wen_ding",b:"shang_steward",value:44,type:"君臣",confidence:"C"},
+    {a:"jili",b:"zhou_general",value:52,type:"宗族",confidence:"C"},
+    {a:"jili",b:"zhou_steward",value:46,type:"君臣",confidence:"C"}
   ],
 
   archive: [
