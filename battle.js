@@ -125,7 +125,7 @@
           melee:def.melee*traitMelee, missile:def.missile*traitMissile, range:def.range||0, armor:def.armor, speed:def.speed*traitSpeed,
           width:bw,height:bh, routed:false, engaged:false,
           attackCd:Math.random()*.8, missileCd:Math.random()*1.5,
-          moving:false, lastMoveSpeed:0, facing:dir>0?0:Math.PI, isAttacker
+          moving:false, lastMoveSpeed:0, facing:dir>0?0:Math.PI, aiFlankSign:idx%2===0?1:-1, isAttacker
         };
         this.units.push(unit);
         row++;
@@ -212,20 +212,48 @@
     }
 
     aiOrders(){
-      for(const u of this.units.filter(x=>x.side==="enemy"&&!x.routed&&x.men>0)){
-        const enemies=this.units.filter(x=>x.side==="player"&&!x.routed&&x.men>0);
-        if(!enemies.length) continue;
-        let target=enemies[0],best=Infinity;
-        for(const e of enemies){
+      const enemyUnits=this.units.filter(x=>x.side==="enemy"&&!x.routed&&x.men>0);
+      const playerUnits=this.units.filter(x=>x.side==="player"&&!x.routed&&x.men>0);
+      for(const u of enemyUnits){
+        if(!playerUnits.length) continue;
+        let target=playerUnits[0],best=Infinity;
+        for(const e of playerUnits){
           let d=Math.hypot(e.x-u.x,e.y-u.y);
-          if(u.type==="chariot" && e.type==="archer") d*=.7;
+          if(u.type==="chariot"){
+            if(e.type==="archer"||e.type==="hunter")d*=.62;
+            if(e.type==="bronze_spear")d*=1.22;
+            if(e.order<35)d*=.72;
+          }else if(u.type==="bronze_spear"&&e.type==="chariot"){
+            d*=.55;
+          }else if((u.type==="bronze_ge"||u.type==="royal_guard")&&e.morale<35){
+            d*=.72;
+          }
           if(d<best){best=d;target=e}
         }
-        if(u.missile>0 && best<Math.max(80,u.range-5) && best>Math.min(72,u.range*.42)){
+
+        if(u.missile>0 && u.type!=="chariot" && best<Math.max(80,u.range-5) && best>Math.min(72,u.range*.42)){
           u.targetEnemy=null;u.tx=null;u.ty=null;
-        }else{
-          u.targetEnemy=target;
+          continue;
         }
+
+        const badChariotGround=["forest","mud","hill","rampart","ditch"].includes(this.terrainAt(u));
+        if(u.type==="chariot"&&!badChariotGround&&!u.engaged&&!target.routed){
+          const rearX=target.x-Math.cos(target.facing)*58;
+          const rearY=target.y-Math.sin(target.facing)*58;
+          const flankX=rearX-Math.sin(target.facing)*82*u.aiFlankSign;
+          const flankY=rearY+Math.cos(target.facing)*82*u.aiFlankSign;
+          const toFlank=Math.hypot(flankX-u.x,flankY-u.y);
+          const attackDir=this.attackDirection(u,target);
+          if(toFlank>38 && attackDir==="front"){
+            u.targetEnemy=null;
+            u.tx=Math.max(25,Math.min(this.w-25,flankX));
+            u.ty=Math.max(25,Math.min(this.h-25,flankY));
+            continue;
+          }
+        }
+
+        u.tx=null;u.ty=null;
+        u.targetEnemy=target;
       }
     }
 
