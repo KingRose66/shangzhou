@@ -1542,7 +1542,7 @@ function processTribute(){
 }
 
 function endTurn(){
-  if(turnBusy||state.gameOver)return;
+  if(turnBusy||state.gameOver||pendingWorldEvent)return;
   turnBusy=true;
   processTraining();
   settlementEconomy();
@@ -1564,19 +1564,59 @@ function endTurn(){
     populationTick();
     ageCharacters();
     refreshAllSupply();
-    randomEvent();
+    minorRandomEvent();
     checkVictory();
     turnBusy=false;
     render();
+    const evt=maybeWorldEvent();
+    if(evt)showWorldEvent(evt);
   });
 }
 
+function rulerRole(owner){
+  if(owner==="shang")return "商王";
+  if(owner==="zhou")return "周君";
+  return "君长";
+}
+function fallbackRuler(owner){
+  const model=state.characters.filter(function(c){return c.faction===owner&&c.alive;}).sort(function(a,b){return b.prestige-a.prestige;})[0];
+  if(model)return model;
+  const f=faction(owner);
+  const c={id:nextId("c"),name:f.short+"新君",faction:owner,role:rulerRole(owner),age:30,
+    command:62,martial:58,admin:62,intrigue:55,diplomacy:58,ritual:60,prestige:55,trait:"持重承统",alive:true,confidence:"C"};
+  state.characters.push(c);return c;
+}
+function installSuccessor(owner){
+  const preferred=(DATA.successions&&DATA.successions[owner]||[]).map(getChar).find(function(c){return characterAvailable(c);});
+  const candidate=preferred||state.characters.filter(function(c){return c.faction===owner&&characterAvailable(c);}).sort(function(a,b){return b.prestige-a.prestige;})[0]||fallbackRuler(owner);
+  candidate.role=rulerRole(owner);
+  faction(owner).ruler=candidate.name;
+  faction(owner).prestige=Math.max(25,faction(owner).prestige-5);
+  addLog(ownerName(owner)+"完成继承："+candidate.name+"即位。",owner===state.player?"warning":"normal");
+  return candidate;
+}
+function handleCharacterDeath(c,cause){
+  if(!c||!c.alive)return;
+  const wasRuler=faction(c.faction).ruler===c.name;
+  c.alive=false;
+  state.characterStatus[c.id]="deceased";
+  state.armies.forEach(function(a){if(a.commander===c.id)a.commander=null;});
+  Object.keys(state.governors).forEach(function(id){if(state.governors[id]===c.id)delete state.governors[id];});
+  addLog(c.name+(cause?"因"+cause:"")+"去世。",c.faction===state.player?"bad":"normal");
+  if(wasRuler)installSuccessor(c.faction);
+}
 function ageCharacters(){
   if(state.season!==0)return;
-  state.characters.forEach(function(c){if(c.alive)c.age++;});
+  state.characters.forEach(function(c){
+    if(!c.alive)return;
+    c.age++;
+    let risk=c.age<50?.0015:c.age<60?.009:c.age<70?.032:c.age<80?.075:.15;
+    if(faction(c.faction).ruler===c.name)risk*=.85;
+    if(Math.random()<risk)handleCharacterDeath(c,"疾病或年老");
+  });
 }
-function randomEvent(){
-  if(Math.random()>.22)return;
+function minorRandomEvent(){
+  if(Math.random()>.18)return;
   const own=ownedSettlements();
   if(!own.length)return;
   const s=own[Math.floor(Math.random()*own.length)];
@@ -1588,6 +1628,140 @@ function randomEvent(){
   }else{
     const shells=50+Math.round(Math.random()*80);faction(state.player).shells+=shells;addLog("交换与贡纳增加，入贝 "+shells+"。","good");
   }
+}
+function demobilizeLaborFraction(owner,fraction){
+  state.armies.filter(function(a){return a.owner===owner&&a.laborers>0;}).forEach(function(a){
+    const n=Math.max(0,Math.floor(a.laborers*fraction));
+    if(!n)return;
+    const path=(a.supplyPath||[]).map(getSet).filter(Boolean);
+    const dest=(getSet(a.at).owner===owner?getSet(a.at):path.reverse().find(function(s){return s.owner===owner;}))||ownedSettlements(owner)[0];
+    if(!dest)return;
+    const slave=Math.min(n,Math.floor((a.laborMix.slave||0)*fraction));
+    const clan=n-slave;
+    dest.pop.slave+=slave;dest.pop.clan+=clan;
+    a.laborers-=n;
+    a.laborMix.slave=Math.max(0,(a.laborMix.slave||0)-slave);
+    a.laborMix.clan=Math.max(0,(a.laborMix.clan||0)-clan);
+  });
+}
+function showWorldEvent(evt){
+  if(!evt||state.gameOver)return;
+  pendingWorldEvent=evt;
+  $("#event-eyebrow").textContent=evt.eyebrow||"军国大事";
+  $("#event-title").textContent=evt.title;
+  $("#event-body").innerHTML=evt.body;
+  $("#event-context").innerHTML=evt.context||"";
+  const actions=$("#event-actions");actions.innerHTML="";
+  evt.choices.forEach(function(choice,index){
+    const b=document.createElement("button");
+    b.innerHTML="<b>"+choice.label+"</b><span>"+choice.detail+"</span>";
+    b.onclick=function(){resolveWorldEvent(index);};
+    actions.appendChild(b);
+  });
+  $("#event-overlay").classList.add("show");
+}
+function resolveWorldEvent(index){
+  const evt=pendingWorldEvent;
+  if(!evt)return;
+  const choice=evt.choices[index];
+  if(!choice)return;
+  choice.apply();
+  if(evt.id)state.eventFlags[evt.id]=state.eventFlags[evt.id]||choice.flag||true;
+  state.eventCooldown=Math.max(state.eventCooldown||0,3);
+  pendingWorldEvent=null;
+  $("#event-overlay").classList.remove("show");
+  render();
+}
+function zhouAscendancyEvent(){
+  if(state.eventFlags.zhou_ascendancy)return null;
+  const zhouGrowth=ownedSettlements("zhou").length;
+  if(zhouGrowth<3&&faction("zhou").prestige<58)return null;
+  if(state.player!=="shang"&&state.player!=="zhou")return null;
+  if(state.player==="shang"){
+    return {id:"zhou_ascendancy",eyebrow:"西土 · B/C级历史复原",title:"周势渐盛",
+      body:"西土传来消息：季历连年经营诸邑，周的威望和动员能力已经不同往日。王畿中的意见分成两派——有人主张厚赐以系之，也有人认为应当尽早限制其继续扩张。",
+      context:"晚商与先周的具体互动需要结合后世文献与考古谨慎复原。这里把“周逐渐强大、商周关系趋于敏感”转化为动态政治压力，而非固定年份事件。",
+      choices:[
+        {label:"厚赐季历，以名分系之",detail:"花费 180 贝；商周关系 +15，周威望略增。",flag:"appease",apply:function(){const f=faction("shang");f.shells=Math.max(0,f.shells-180);changeRelation("shang","zhou",15);changeCharRelation("wen_ding","jili",12);faction("zhou").prestige+=2;addLog("王廷厚赐季历，希望以名分和礼物维持西土秩序。","good");}},
+        {label:"敕令周收敛征伐",detail:"商威望 +4；商周关系 -15，人物关系恶化。",flag:"restrain",apply:function(){faction("shang").prestige+=4;changeRelation("shang","zhou",-15);changeCharRelation("wen_ding","jili",-12);addLog("商王要求周收敛西土征伐，双方猜忌加深。","warning");}},
+        {label:"召季历入大邑商议事",detail:"关系 -6；开启后续“季历入商”危机路线，但并不强制发生历史结局。",flag:"summon",apply:function(){changeRelation("shang","zhou",-6);changeCharRelation("wen_ding","jili",-8);state.eventFlags.jili_summoned=true;addLog("王命季历入大邑商议事，朝野对此议论不一。","warning");}}
+      ]};
+  }
+  return {id:"zhou_ascendancy",eyebrow:"西土 · B/C级历史复原",title:"商廷关注西土",
+    body:"来自东方的使者带来王命。周在西土连续扩张已经引起大邑商注意。是暂时收敛锋芒，还是继续经营自己的力量？",
+    context:"游戏不预设周必然反商。你的选择会改变商周关系、周的威望与后续事件概率。",
+    choices:[
+      {label:"受命而止，遣使修好",detail:"商周关系 +14；周威望 -2；获得 80 贝礼物。",flag:"accept",apply:function(){changeRelation("shang","zhou",14);faction("zhou").prestige=Math.max(1,faction("zhou").prestige-2);faction("zhou").shells+=80;changeCharRelation("wen_ding","jili",10);addLog("周暂时收敛锋芒，与商廷维持和好。","good");}},
+      {label:"继续经营西土",detail:"周威望 +5；商周关系 -12。",flag:"expand",apply:function(){faction("zhou").prestige+=5;changeRelation("shang","zhou",-12);changeCharRelation("wen_ding","jili",-8);addLog("周没有停止扩张，西土威势继续增长。","warning");}},
+      {label:"厚贡示恭，暗中整备",detail:"花费 120 贝；商周关系 +10，选中周军士气 +3。",flag:"tribute",apply:function(){faction("zhou").shells=Math.max(0,faction("zhou").shells-120);changeRelation("shang","zhou",10);state.armies.filter(function(a){return a.owner==="zhou";}).forEach(function(a){a.morale=Math.min(90,a.morale+3);});addLog("周向商廷厚贡，同时继续整顿内部军政。","good");}}
+    ]};
+}
+function jiliCrisisEvent(){
+  if(state.player!=="shang"||state.eventFlags.jili_crisis||!state.eventFlags.jili_summoned)return null;
+  const jili=getChar("jili");
+  if(!jili||!jili.alive)return null;
+  if(relation("shang","zhou")>-18&&charRelation("wen_ding","jili")>-5)return null;
+  return {id:"jili_crisis",eyebrow:"传世文献路线 · C级处理",title:"季历滞留大邑商",
+    body:"季历入商后，围绕是否允许其立即归周，王廷出现激烈争论。有人认为留下季历可以压制西土；也有人警告，这会把尚可维持的服属关系推向不可逆的敌对。",
+    context:"后世传世文献保存有“文丁杀季历”等说法，但并非可以像同时代甲骨材料那样直接使用。本事件因此只作为玩家可能选择的历史路线，不设为必然事实。",
+    choices:[
+      {label:"礼送季历归周",detail:"商周关系 +18；文丁—季历关系 +15；商威望 -2。",flag:"release",apply:function(){delete state.characterStatus.jili;changeRelation("shang","zhou",18);changeCharRelation("wen_ding","jili",15);faction("shang").prestige=Math.max(1,faction("shang").prestige-2);addLog("季历获准归周，商周关系暂时缓和。","good");}},
+      {label:"暂留季历，以观西土",detail:"季历进入拘留状态；商周关系 -28，周威望 +6。",flag:"detain",apply:function(){state.characterStatus.jili="detained";state.armies.forEach(function(a){if(a.commander==="jili")a.commander=null;});changeRelation("shang","zhou",-28);faction("zhou").prestige+=6;addLog("季历被留在大邑商，西土震动。","bad");}},
+      {label:"处死季历",detail:"极端路线：季历死亡，姬昌继位；商周关系降至严重敌对，并立即开战。",flag:"kill",apply:function(){handleCharacterDeath(jili,"王廷处置");setRelation("shang","zhou",-80);faction("zhou").prestige+=10;declareWar("shang","zhou",true);addLog("季历之死使商周关系彻底破裂。","bad");}}
+    ]};
+}
+function huanDroughtEvent(){
+  if(state.player!=="shang"||state.eventFlags.huan_drought||state.year<-1112)return null;
+  const yin=getSet("yin");
+  return {id:"huan_drought",eyebrow:"洹水 · 传世纪年线索",title:"洹水水势异常",
+    body:"洹水一带水势骤减，田间开始出现旱象。王畿粮仓尚有储备，但如果处置失当，族众和服从度都会受到影响。",
+    context:"后世《竹书纪年》系统保存有文丁时期洹水异常的记载。游戏不把具体年份与自然现象视作无争议事实，只据此设计一次地方灾歉压力。",
+    choices:[
+      {label:"开仓赈给",detail:"殷粮 -700 石；地方服从 +10，商威望 +3。",flag:"granary",apply:function(){yin.grain=Math.max(0,yin.grain-700);yin.control=Math.min(100,yin.control+10);faction("shang").prestige+=3;addLog("王畿开仓赈给，旱情没有演变成更大动荡。","good");}},
+      {label:"祭祀并节制口粮",detail:"牲畜 -18、贝 -80、粮 -350；威望 +5。",flag:"ritual",apply:function(){const f=faction("shang");f.livestock=Math.max(0,f.livestock-18);f.shells=Math.max(0,f.shells-80);yin.grain=Math.max(0,yin.grain-350);f.prestige+=5;addLog("王廷举行祭祀并收紧配给，维持了王畿秩序。","warning");}},
+      {label:"优先保全军粮",detail:"粮仅 -180；地方服从 -12，商威望 -2。",flag:"army",apply:function(){yin.grain=Math.max(0,yin.grain-180);yin.control=Math.max(0,yin.control-12);faction("shang").prestige=Math.max(1,faction("shang").prestige-2);addLog("王廷优先保全军粮，王畿民众怨言渐起。","bad");}}
+    ]};
+}
+function laborStrainEvent(){
+  if((state.eventCooldown||0)>0)return null;
+  const ownPop=ownedSettlements().reduce(function(n,s){return n+s.pop.clan+s.pop.slave;},0);
+  const mobilized=state.armies.filter(function(a){return a.owner===state.player;}).reduce(function(n,a){return n+armyMen(a)+a.laborers;},0);
+  if(ownPop<=0||mobilized/ownPop<.075)return null;
+  return {id:null,eyebrow:"劳役 · 国内",title:"族众疲于军役",
+    body:"连续征发使田间劳力减少，几处聚落开始抱怨民夫迟迟不能归家。军队仍可维持行动，但继续压榨人手会让秋收和地方服从承受更大压力。",
+    context:"这是人口—军役系统的反馈事件，不要求逐户管理劳役。",
+    choices:[
+      {label:"轮换三成民夫归里",detail:"各军遣返约 30% 民夫；地方生产压力缓解。",apply:function(){demobilizeLaborFraction(state.player,.30);ownedSettlements().forEach(function(s){s.control=Math.min(100,s.control+3);});addLog("王命轮换部分民夫归里，各地劳役压力稍缓。","good");}},
+      {label:"用贝与粮补偿其家属",detail:"花费最多 220 贝和 300 石粮；地方服从 +5。",apply:function(){const f=faction(state.player);f.shells=Math.max(0,f.shells-220);const rich=ownedSettlements().sort(function(a,b){return b.grain-a.grain;})[0];if(rich)rich.grain=Math.max(0,rich.grain-300);ownedSettlements().forEach(function(s){s.control=Math.min(100,s.control+5);});addLog("以贝粮补偿军役之家，征发得以继续。","good");}},
+      {label:"军务为先，继续征发",detail:"全军士气 +3；各地服从 -6。",apply:function(){state.armies.filter(function(a){return a.owner===state.player;}).forEach(function(a){a.morale=Math.min(90,a.morale+3);});ownedSettlements().forEach(function(s){s.control=Math.max(0,s.control-6);});addLog("军务压倒农务，军心稍振而地方怨气上升。","warning");}}
+    ]};
+}
+function craftsmenEvent(){
+  if((state.eventCooldown||0)>0)return null;
+  const market=ownedSettlements().filter(function(s){return s.market>=2;}).sort(function(a,b){return b.market-a.market;})[0];
+  if(!market||faction(state.player).shells<120)return null;
+  return {id:null,eyebrow:"百工 · 贸易网络",title:"外来工匠抵达"+market.name,
+    body:"一批随商旅而来的工匠愿意暂居当地。他们带来不同的制范、车作与器物经验，但要留住这些人，需要粮食、居所和贝。",
+    context:"晚商的工艺传播通过人员、交换网络与地方作坊实现；这里用一次事件抽象工匠流动。",
+    choices:[
+      {label:"厚待百工，择其所长",detail:"花费 180 贝；优先获得一项尚未掌握的可传播技艺。",apply:function(){faction(state.player).shells=Math.max(0,faction(state.player).shells-180);const pool=["wheel_maintenance","long_supply","improved_mold","highland_stock","fortification"].filter(function(id){return !faction(state.player).tech.includes(id);});if(pool.length){const id=pool[Math.floor(Math.random()*pool.length)];faction(state.player).tech.push(id);addLog("外来工匠带来技艺："+DATA.techs[id].name+"。","good");}else{market.bronze+=90;market.weapons.ge+=25;addLog("工匠改进作坊，获得额外青铜料与兵器。","good");}}},
+      {label:"只雇用一季",detail:"花费 80 贝；当地青铜料 +70、木骨兵器 +100。",apply:function(){faction(state.player).shells=Math.max(0,faction(state.player).shells-80);market.bronze+=70;market.weapons.wood+=100;addLog("短期雇用百工，作坊库存增加。","good");}},
+      {label:"不额外支出",detail:"不花贝；交换场仍因商旅停留获得少量收入。",apply:function(){faction(state.player).shells+=35;addLog("工匠没有久留，但商旅往来带来少量贝。");}}
+    ]};
+}
+function maybeWorldEvent(){
+  if(state.gameOver||pendingWorldEvent)return null;
+  if((state.eventCooldown||0)>0)state.eventCooldown--;
+
+  const scripted=[huanDroughtEvent(),zhouAscendancyEvent(),jiliCrisisEvent()].filter(Boolean);
+  if(scripted.length)return scripted[0];
+
+  if((state.eventCooldown||0)>0)return null;
+  const labor=laborStrainEvent();
+  if(labor&&Math.random()<.45)return labor;
+  const craft=craftsmenEvent();
+  if(craft&&Math.random()<.18)return craft;
+  return null;
 }
 
 function divine(){
@@ -1797,6 +1971,7 @@ function showHelp(){
     '<b>一局的核心循环</b><br>'+
     '经营人口、粮仓、贝与兵器 → 选择何时征发劳力和军队 → 保持民夫与粮道 → 通过贸易、贡纳或战争扩张影响。<br><br>'+
     '<b>地图与情报</b><br>点击聚落查看；行军时先选中我方军队，再点相邻目的地检查情报，最后点击“行军至选中聚落”确认。外国城邑默认不会显示精确人口、粮仓和军队；靠近、贸易、服属或派斥候可提升情报。关键渡口和道路被敌军占据时粮道可能中断。<br><br>'+
+    '<b>人物与事件</b><br>人物会老去、死亡和继承；任命会影响其与君主的关系。重大事件提供有代价的选择，并标明历史置信度，不把后世传说强制写成唯一历史。<br><br>'+
     '<b>统治</b><br>新征服聚落不会立刻贡献全部产能；地方服从度会在驻军、邑宰、威望和时间作用下逐步恢复。<br><br>'+
     '<b>军队</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要装备与训练。军队可以分军、合军。<br><br>'+
     '<b>战斗</b><br>实时战场中左键选单位，右键移动或攻击。胜负主要来自士气、队形、疲劳、侧击和溃败，而不是把所有人杀光。<br><br>'+
@@ -1813,7 +1988,7 @@ function archive(){
   notice(html,"历代史实人物档案");
 }
 function saveGame(){
-  if(pendingEncounter)return notice("请先处理当前两军接触，再保存战局。");
+  if(pendingEncounter||pendingWorldEvent)return notice("请先处理当前战斗或军国事件，再保存战局。");
   try{
     localStorage.setItem("shangzhou-save",JSON.stringify(state));
     addLog("战局已保存到本机浏览器。","good");render();
@@ -1833,6 +2008,10 @@ function loadGame(){
     state.tribute=state.tribute||{};
     state.wars=state.wars||{};
     state.warTurns=state.warTurns||{};
+    state.characterRelations=state.characterRelations||Object.fromEntries((DATA.relationshipSeeds||[]).map(function(r){return [[r.a,r.b].sort().join("|"),r.value];}));
+    state.characterStatus=state.characterStatus||{};
+    state.eventFlags=state.eventFlags||{};
+    state.eventCooldown=state.eventCooldown||0;
     state.intel=state.intel||{};
     state.tick=state.tick||0;
     state.settlements.forEach(function(s){if(typeof s.control!=="number")s.control=100;});
@@ -1896,7 +2075,9 @@ window.SHANGZHOU_DEBUG={
   endTurn:endTurn,
   intelLevel:function(id){return intelLevel(getSet(id));},
   hasPendingEncounter:function(){return !!pendingEncounter;},
-  autoPendingEncounter:autoPendingEncounter
+  autoPendingEncounter:autoPendingEncounter,
+  hasPendingWorldEvent:function(){return !!pendingWorldEvent;},
+  resolveWorldEvent:resolveWorldEvent
 };
 
 state=freshState("shang");
