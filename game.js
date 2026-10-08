@@ -182,7 +182,10 @@ function removeGovernorAssignments(charId){
 }
 function commanderBonus(a){
   const c=getChar(a.commander);
-  return c ? 0.82+c.command/250 : 1;
+  if(!c)return 1;
+  const loyalty=characterLoyalty(c);
+  const loyaltyFactor=loyalty<35?.90:loyalty>80?1.04:1;
+  return (0.82+c.command/250)*loyaltyFactor;
 }
 function traitEffectText(c){
   if(!c)return "";
@@ -509,7 +512,11 @@ function forecastHarvest(s){
   const laborPenalty=Math.min(.38,drawn/Math.max(1000,pop)*1.55);
   let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
   const gov=getChar(state.governors[s.id]);
-  if(gov)crop*=Math.max(.88,1+(gov.admin-50)/300);
+  if(gov){
+    crop*=Math.max(.88,1+(gov.admin-50)/300);
+    const loyalty=characterLoyalty(gov);
+    crop*=loyalty<35?.94:loyalty>80?1.025:1;
+  }
   if(gov&&gov.trait==="善治仓廪")crop*=1.08;
   if(hasTech(s.owner,"wei_farming"))crop*=1.08;
   crop*=controlEfficiency(s);
@@ -1258,6 +1265,10 @@ function settlementEconomy(){
     const owner=faction(s.owner);
     const gov=getChar(state.governors[s.id]);
     let govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
+    if(gov){
+      const loyalty=characterLoyalty(gov);
+      govEco*=loyalty<35?.92:loyalty>80?1.03:1;
+    }
     if(gov&&gov.trait==="善治仓廪")govEco*=1.08;
     owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco*controlEfficiency(s));
 
@@ -2147,7 +2158,15 @@ window.SHANGZHOU_DEBUG={
   hasPendingEncounter:function(){return !!pendingEncounter;},
   autoPendingEncounter:autoPendingEncounter,
   hasPendingWorldEvent:function(){return !!pendingWorldEvent;},
-  resolveWorldEvent:resolveWorldEvent
+  resolveWorldEvent:resolveWorldEvent,
+  killCharacter:function(id){handleCharacterDeath(getChar(id),"测试事件");render();},
+  loyalty:function(id){return characterLoyalty(getChar(id));},
+  forceEvent:function(id){
+    const map={craftsmen:craftsmenEvent,labor:laborStrainEvent,zhou:zhouAscendancyEvent,drought:huanDroughtEvent,jili:jiliCrisisEvent};
+    const evt=map[id]?map[id]():null;
+    if(evt)showWorldEvent(evt);
+    return !!evt;
+  }
 };
 
 state=freshState("shang");
