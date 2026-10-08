@@ -159,3 +159,14 @@ dialog::backdrop{background:#0009}
 .event-actions button{text-align:left;padding:11px 13px}
 .event-actions button b{display:block;color:#ead59d;margin-bottom:3px}
 .event-actions button span{display:block;font-size:11px;color:#b9aa95;line-height:1.5}
+
+.campaign-end-overlay{z-index:90;background:rgba(9,7,5,.94)}
+.campaign-end-card{width:min(680px,94vw);background:linear-gradient(180deg,#2c2218,#17120e);border:1px solid #8a6842;border-radius:13px;padding:28px;box-shadow:0 30px 100px #000c}
+.campaign-end-card h2{font-family:Georgia,"Noto Serif SC",serif;font-size:34px;margin:9px 0 14px}
+.campaign-end-card #campaign-end-body{line-height:1.7;color:#dfd0b8}
+.campaign-end-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0}
+.campaign-end-stats>div{background:#1c1712;border:1px solid #493927;border-radius:7px;padding:10px}
+.campaign-end-stats span{display:block;font-size:10px;color:#a7957d}
+.campaign-end-stats b{display:block;margin-top:3px}
+.campaign-end-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:620px){.campaign-end-stats{grid-template-columns:1fr 1fr}.campaign-end-actions{grid-template-columns:1fr}}
