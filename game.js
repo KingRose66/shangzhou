@@ -152,6 +152,12 @@ function armyMen(a){ return a.units.reduce(function(n,u){return n+Math.max(0,u.m
 function hasTech(owner,id){ return !!(faction(owner)&&faction(owner).tech.includes(id)); }
 function playerOwnsSettlement(id){ const s=getSet(id); return s && s.owner===state.player; }
 function seasonName(){ return DATA.seasons[state.season]; }
+function seasonEffectText(){
+  if(state.season===0)return "春：适合整备与征发，但过度抽调劳力会影响后续秋收。";
+  if(state.season===1)return "夏：河谷与渡口更难通行，涉水行军消耗增加。";
+  if(state.season===2)return "秋：本季结束时进行主要收获结算。";
+  return "冬：军粮与草料消耗上升，高地行军更加困难。";
+}
 function addLog(text,type){
   const entry={year:state.year,season:seasonName(),tick:state.tick||0,text:text,type:type||"normal"};
   state.log.unshift({text:entry.season+" · "+text,type:entry.type});
@@ -369,6 +375,7 @@ function renderFaction(){
       '<span>青铜储备</span><b>'+fmt(t.bronze)+'</b>'+
     '</div>'+
     '<p class="small">人口：族人 '+fmt(t.clan)+' · 奴隶 '+fmt(t.slave)+'</p>'+
+    '<p class="small muted">'+seasonEffectText()+'</p>'+
     '<p class="small">'+campaignObjectiveHtml()+'</p>'+
     '<p class="small muted">技艺：'+(techs||"无")+'</p>';
 }
@@ -900,10 +907,11 @@ function refreshAllSupply(){
 
 function marchCost(a,dest){
   const men=armyMen(a),rough=["hill","highland"].includes(dest.terrain)?1.22:dest.terrain==="river"?1.12:1;
+  const seasonal=(state.season===1&&dest.terrain==="river")?1.12:(state.season===3&&["hill","highland"].includes(dest.terrain))?1.16:state.season===3?1.05:1;
   const tech=hasTech(a.owner,"long_supply")?.88:1;
   const commander=getChar(a.commander);
   const commandMarch=commander&&commander.trait==="西土开拓"?.90:commander&&commander.trait==="舟陆并用"&&dest.terrain==="river"?.92:1;
-  const grain=Math.max(18,men*.04*rough*tech*commandMarch);
+  const grain=Math.max(18,men*.04*rough*seasonal*tech*commandMarch);
   const fodder=chariotCount(a)*8*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
   return {grain:grain,fodder:fodder};
 }
@@ -1360,7 +1368,9 @@ function consumeArmies(){
     if(a.supplyState==="中断")grainUse*=1.22;
     const tech=hasTech(a.owner,"long_supply")?.88:1;
     grainUse*=tech;
-    const fodderUse=chariotCount(a)*4*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
+    if(state.season===3)grainUse*=1.08;
+    const winterFodder=state.season===3?1.15:1;
+    const fodderUse=chariotCount(a)*4*winterFodder*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
     a.grain-=grainUse;a.fodder-=fodderUse;
 
     const s=getSet(a.at);
