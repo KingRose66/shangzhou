@@ -1480,6 +1480,7 @@ function chooseAiAction(owner){
 
   // War is declared only when the army is actually about to enter the target polity.
   if(next.owner!==owner&&!hasMilitaryAccess(owner,next.owner)&&!isAtWar(owner,next.owner)){
+    if(next.owner===state.player)return null;
     if(next.owner==="neutral"||relation(owner,next.owner)<-20)declareWar(owner,next.owner,true);
     else return null;
   }
@@ -1535,15 +1536,24 @@ function aiDiplomaticPulse(){
       const a=majors[i],b=majors[j],key=pairKey(a,b);
       if(!shareBorder(a,b))continue;
 
-      // Player wars are never ended or begun silently; the player keeps agency.
+      // Wars involving the player are decided here, so an AI cannot surprise-declare merely by clicking into a border node.
       if(a===state.player||b===state.player){
-        if(!isAtWar(a,b)){
-          const other=a===state.player?b:a;
-          // Expanding powers make neighbors more wary, but this is gradual.
-          const expansion=Math.max(0,ownedSettlements(other).length-2);
-          if(expansion>1 && relation(a,b)>-30 && Math.random()<.45){
-            changeRelation(a,b,-Math.min(5,1+expansion));
-            addLog("邻近的"+ownerName(other)+"势力扩张，引起边境戒备。","warning");
+        const player=state.player,other=a===player?b:a;
+        if(isAtWar(player,other))continue;
+
+        const expansion=Math.max(0,ownedSettlements(other).length-2);
+        if(expansion>1 && relation(player,other)>-35 && Math.random()<.45){
+          changeRelation(player,other,-Math.min(5,1+expansion));
+          addLog("邻近的"+ownerName(other)+"势力扩张，引起边境戒备。","warning");
+        }
+
+        const rel=relation(player,other);
+        if(rel<=-45&&shareBorder(player,other)){
+          const aiPower=factionPower(other),playerPower=factionPower(player);
+          const confidence=Math.max(.08,Math.min(.42,.16+(aiPower/playerPower-1)*.22+(-rel-45)/180));
+          if(Math.random()<confidence){
+            declareWar(other,player,true);
+            addLog(ownerName(other)+"正式断绝往来并向我方开战。","bad");
           }
         }
         continue;
