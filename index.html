@@ -11,7 +11,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="eyebrow">晚商大战略 · v1.2</div>
+        <div class="eyebrow">晚商大战略 · v1.3</div>
         <h1>大邑商：四土</h1>
       </div>
       <div class="top-actions">
@@ -64,7 +64,7 @@
         <div class="map-toolbar">
           <div>
             <b>战略地图</b>
-            <span class="muted">选中军队后，点击相邻节点行军。道路、渡口和敌军会影响粮道。</span>
+            <span class="muted">点击聚落查看；选军后点击目标，使用右侧“行军”确认。粮道会高亮。</span>
           </div>
           <div class="legend">
             <span><i class="dot shang"></i>商</span>
@@ -255,6 +255,8 @@
         <span id="battle-status">—</span>
       </div>
       <div class="battle-controls">
+        <button id="battle-advance" title="全军主动迎战敌军">全军推进</button>
+        <button id="battle-hold" title="回归防守阵线，近敌时自主迎击">全军坚守</button>
         <button id="battle-pause">暂停</button>
         <button id="battle-speed">速度 ×1</button>
         <button id="battle-retreat">撤退</button>
@@ -262,7 +264,7 @@
     </div>
     <canvas id="battle-canvas"></canvas>
     <div class="battle-footer">
-      <div id="battle-unit-detail">点击己方单位查看状态；右键地面移动，右键敌军攻击。</div>
+      <div id="battle-unit-detail">点击己方单位查看状态；右键地面移动、右键敌军攻击；也可使用全军推进/坚守。</div>
       <div class="muted">战斗核心：队形、士气、疲劳、地形与溃败。战车适合侧击和追击，不适合在森林、泥地里硬冲。</div>
     </div>
   </div>
