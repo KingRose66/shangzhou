@@ -26,6 +26,113 @@ function changeCharRelation(a,b,d){
   const key=charRelationKey(a,b);
   state.characterRelations[key]=Math.max(-100,Math.min(100,charRelation(a,b)+d));
 }
+// Each character lives at a settlement, travels across actual connected roads,
+// joins a field army, or is held captive. A position has mechanical consequences.
+function factionHome(owner){
+  return (state.settlements.find(s=>s.owner===owner&&s.capital)||
+    state.settlements.find(s=>s.owner===owner)||
+    DATA.settlements.find(s=>s.owner===owner&&s.capital)||DATA.settlements[0]).id;
+}
+function initializeCharacterLocations(){
+  const initialArmies={shang_general:"a1",zhou_general:"a2",gaodi_lord:"a3",
+    east_lord:"a4",jiang_lord:"a5",wu_lord:"a6",shu_lord:"a7"};
+  state.characters.forEach(function(c){
+    if(c.location)return;
+    if(initialArmies[c.id]&&getArmy(initialArmies[c.id])){
+      c.location={kind:"army",id:initialArmies[c.id]};
+    }else{
+      const gov=charAssignedSettlement(c.id);
+      c.location={kind:"settlement",id:gov?gov.id:factionHome(c.faction)};
+    }
+  });
+}
+function characterPosition(c){
+  if(!c||!c.alive)return null;
+  if(state.characterStatus[c.id]==="detained")return {kind:"detained",id:c.location?.id||"yin"};
+  const army=charAssignedArmy(c.id);
+  if(army)return {kind:"army",id:army.id,settlement:army.at};
+  const gov=charAssignedSettlement(c.id);
+  if(gov)return {kind:"settlement",id:gov.id};
+  if(c.location&&c.location.kind==="army"){
+    const a=getArmy(c.location.id);
+    if(a)return {kind:"settlement",id:a.at};
+    return {kind:"settlement",id:factionHome(c.faction)};
+  }
+  if(c.location&&c.location.kind==="settlement"&&getSet(c.location.id))
+    return {kind:"settlement",id:c.location.id};
+  return {kind:"settlement",id:factionHome(c.faction)};
+}
+function activeGovernor(s){
+  if(!s)return null;
+  const c=getChar(state.governors[s.id]);
+  if(!c||!characterAvailable(c)||c.faction!==s.owner||c.travel)return null;
+  return c.location&&c.location.kind==="settlement"&&c.location.id===s.id?c:null;
+}
+function characterAtSettlement(c,id){
+  const p=characterPosition(c);
+  return !!p&&(p.kind==="settlement"&&p.id===id||
+    p.kind==="army"&&p.settlement===id);
+}
+function characterRoute(owner,fromId,toId){
+  const q=[[fromId]],seen=new Set([fromId]);
+  while(q.length){
+    const path=q.shift(),last=path[path.length-1];
+    if(last===toId)return path;
+    const origin=getSet(last);
+    if(!origin)continue;
+    for(const nextId of origin.roads){
+      if(seen.has(nextId))continue;
+      const n=getSet(nextId);
+      if(n&&n.owner===owner&&!nodeBlocked(nextId,owner)){
+        seen.add(nextId);q.push(path.concat(nextId));
+      }
+    }
+  }
+  return null;
+}
+function moveCharacter(charId){
+  const c=getChar(charId),dest=getSet(state.selectedSettlement);
+  if(!c||!characterAvailable(c)||c.faction!==state.player)return;
+  if(!dest||dest.owner!==c.faction)return notice("人物只能调往己方控制的聚落。");
+  if(c.travel)return notice(c.name+"正在调动途中，抵达后才能重新下令。");
+  const position=characterPosition(c);
+  const start=position.kind==="army"?position.settlement:position.id;
+  if(start===dest.id)return notice(c.name+"已经位于"+dest.name+"。");
+  const path=characterRoute(c.faction,start,dest.id);
+  if(!path)return notice("目前没有贯通本国聚落的道路；人物不能穿越敌对领土瞬移。");
+  const army=charAssignedArmy(c.id);
+  const gov=charAssignedSettlement(c.id);
+  if((army||gov)&&!confirm("调动"+c.name+"将解除当前"+(army?"统军":"主政")+"职务。确定吗？"))return;
+  if(army)army.commander=null;
+  removeGovernorAssignments(c.id);
+  c.location={kind:"settlement",id:start};
+  c.travel={path:path.slice(1),destination:dest.id};
+  addLog(c.name+"从"+getSet(start).name+"启程前往"+dest.name+"，需"+c.travel.path.length+"季。");
+  render();
+}
+function processCharacterTravel(){
+  state.characters.forEach(function(c){
+    if(!c.alive||!c.travel||!c.travel.path.length)return;
+    const nextId=c.travel.path[0],next=getSet(nextId);
+    if(!next||next.owner!==c.faction||nodeBlocked(nextId,c.faction)){
+      c.travel=null;
+      if(c.faction===state.player)addLog(c.name+"的调动因道路受阻而中止。","warning");
+      return;
+    }
+    c.travel.path.shift();
+    c.location={kind:"settlement",id:nextId};
+    if(!c.travel.path.length){
+      c.travel=null;
+      if(c.faction===state.player)addLog(c.name+"抵达"+next.name+"，现在可以任命为邑宰或将领。","good");
+    }
+  });
+}
+function characterInCityNames(cityId){
+  return state.characters.filter(c=>c.alive&&!c.travel&&
+    characterPosition(c)?.kind==="settlement"&&characterPosition(c)?.id===cityId&&
+    c.faction===getSet(cityId).owner).map(c=>c.name);
+}
+
 function characterAvailable(c){
   return !!(c&&c.alive&&state.characterStatus[c.id]!=="detained");
 }
@@ -313,6 +420,7 @@ function freshState(player){
 function startGame(player,options){
   state=freshState(player);
   pendingEncounter=null;pendingWorldEvent=null;pendingBattleReport=null;turnBusy=false;
+  initializeCharacterLocations();
   const first=state.armies.find(function(a){return a.owner===player;});
   state.selectedArmy=first?first.id:null;
   refreshAllSupply();
@@ -419,13 +527,23 @@ function renderCharacters(){
   const chars=state.characters.filter(function(c){return c.faction===state.player&&c.alive;});
   $("#characters").innerHTML=chars.map(function(c){
     const army=charAssignedArmy(c.id),gov=charAssignedSettlement(c.id),loyalty=characterLoyalty(c),status=state.characterStatus[c.id];
+    const pos=characterPosition(c);
+    const locationText=c.travel?"调动中 → "+getSet(c.travel.destination)?.name:
+      pos?.kind==="army"?"随军："+(getArmy(pos.id)?.name||"失散军队")+"（"+(getSet(pos.settlement)?.name||"") +"）":
+      pos?.kind==="detained"?"被拘留："+(getSet(pos.id)?.name||"未知"):
+      "驻于："+(getSet(pos?.id)?.name||"未知");
     return '<div class="char-card">'+
       '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+'</span>'+
       '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+' · 忠诚 '+loyalty+'</div>'+
       (status?'<div class="small warning">状态：'+(status==="detained"?"被拘留":status)+'</div>':'')+
       '<div class="small"><b>'+c.trait+'</b>：'+traitEffectText(c)+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
+      '<div class="small char-location">⌖ '+locationText+'</div>'+
+      (characterAvailable(c)&&!c.travel?'<button type="button" class="char-transfer" data-char-transfer="'+c.id+'">调往当前选中城邑</button>':'')+
     '</div>';
   }).join("");
+  $("[data-char-transfer]").forEach(function(b){
+    b.onclick=function(){moveCharacter(b.dataset.charTransfer);};
+  });
 }
 
 // Geographic projection: WGS84 coordinates on Web Mercator raster terrain.
@@ -723,7 +841,7 @@ function forecastHarvest(s){
   const pop=s.pop.clan+s.pop.slave;
   const laborPenalty=Math.min(.38,drawn/Math.max(1000,pop)*1.55);
   let crop=(s.pop.clan*.105+s.pop.slave*.068)*s.farm/100*(1-laborPenalty);
-  const gov=getChar(state.governors[s.id]);
+  const gov=activeGovernor(s);
   if(gov){
     crop*=Math.max(.88,1+(gov.admin-50)/300);
     const loyalty=characterLoyalty(gov);
@@ -784,8 +902,10 @@ function renderSettlement(){
 
   const pop=s.pop.clan+s.pop.slave;
   const foodTurns=s.grain/Math.max(1,pop*.012);
-  const governor=getChar(state.governors[s.id]);
-  const govOptions='<option value="">未任命</option>'+state.characters.filter(function(c){return c.faction===state.player&&characterAvailable(c);}).map(function(c){
+  const governor=activeGovernor(s);
+  const govOptions='<option value="">未任命</option>'+state.characters.filter(function(c){
+    return c.faction===state.player&&characterAvailable(c)&&!c.travel&&characterAtSettlement(c,s.id);
+  }).map(function(c){
     return '<option value="'+c.id+'" '+(state.governors[s.id]===c.id?"selected":"")+'>'+c.name+'（治政 '+c.admin+'）</option>';
   }).join("");
   $("#settlement-detail").innerHTML=
@@ -805,6 +925,7 @@ function renderSettlement(){
     '<p class="small muted">库存：木骨兵器 '+s.weapons.wood+' · 弓 '+s.weapons.bow+' · 戈 '+s.weapons.ge+' · 矛 '+s.weapons.spear+' · 战车 '+s.weapons.chariot+'</p>'+
     '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮；按当前征发状态，预计秋收约 <b>'+fmt(forecastHarvest(s))+' 石</b>。</p>'+
     '<p class="small good">可在此征募、采买、训练并征调民夫。</p>'+
+    '<p class="small char-location">城中人物：'+(characterInCityNames(s.id).join("、")||"无")+'</p>'+
     '<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>'+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
   $("#governor-select").onchange=function(){assignGovernor(s.id,this.value);};
@@ -865,7 +986,9 @@ function renderArmyDetail(){
     $("#btn-load-supply").disabled=true;
     return;
   }
-  const available=state.characters.filter(function(c){return c.faction===state.player&&characterAvailable(c);});
+  const available=state.characters.filter(function(c){
+    return c.faction===state.player&&characterAvailable(c)&&!c.travel&&characterAtSettlement(c,a.at);
+  });
   const options='<option value="">未任命</option>'+available.map(function(c){
     return '<option value="'+c.id+'" '+(a.commander===c.id?"selected":"")+'>'+c.name+'（统御 '+c.command+'）</option>';
   }).join("");
@@ -946,7 +1069,13 @@ function renderLog(){
 
 function assignCommander(armyId,charId){
   const a=getArmy(armyId);
-  if(!a)return;
+  if(!a||a.owner!==state.player)return;
+  const chosen=charId?getChar(charId):null;
+  if(chosen&&(!characterAvailable(chosen)||chosen.faction!==a.owner||chosen.travel||!characterAtSettlement(chosen,a.at))){
+    return notice("将领必须先抵达军队所在聚落，不能跨城隔空任命。");
+  }
+  const previous=getChar(a.commander);
+  if(previous&&previous.id!==charId)previous.location={kind:"settlement",id:a.at};
   if(charId){
     const other=charAssignedArmy(charId);
     if(other&&other.id!==a.id)other.commander=null;
@@ -954,6 +1083,7 @@ function assignCommander(armyId,charId){
   }
   a.commander=charId||null;
   if(charId){
+    chosen.location={kind:"army",id:a.id};
     const ruler=currentRulerCharacter(state.player);
     if(ruler)changeCharRelation(charId,ruler.id,2);
   }
@@ -964,11 +1094,18 @@ function assignCommander(armyId,charId){
 function assignGovernor(settlementId,charId){
   const s=getSet(settlementId);
   if(!s||s.owner!==state.player)return;
+  const chosen=charId?getChar(charId):null;
+  if(chosen&&(!characterAvailable(chosen)||chosen.faction!==s.owner||chosen.travel||!characterAtSettlement(chosen,s.id))){
+    return notice("人物必须先到达此城，才能主政。请从人物卡下达调动命令。");
+  }
+  const previous=getChar(state.governors[s.id]);
+  if(previous&&previous.id!==charId)previous.location={kind:"settlement",id:s.id};
   if(charId){
     const army=charAssignedArmy(charId);
     if(army)army.commander=null;
     removeGovernorAssignments(charId);
     state.governors[settlementId]=charId;
+    chosen.location={kind:"settlement",id:s.id};
     const ruler=currentRulerCharacter(state.player);
     if(ruler)changeCharRelation(charId,ruler.id,2);
     addLog("任命 "+getChar(charId).name+" 主政 "+s.name+"。");
@@ -1311,6 +1448,24 @@ function tryLearnTech(receiver,source,reason,chance){
 }
 function occupySettlement(a,city){
   const old=city.owner;
+  // Besieged officials in the conquered city must escape or be captured.
+  state.characters.filter(function(c){
+    if(!c.alive||c.faction!==old)return false;
+    const p=characterPosition(c);
+    return p&&p.kind==="settlement"&&p.id===city.id;
+  }).forEach(function(c){
+    c.travel=null;
+    if(Math.random()<.25){
+      state.characterStatus[c.id]="detained";
+      c.location={kind:"detained",id:city.id};
+      addLog(c.name+"在"+city.name+"失守时被拘留。","warning");
+    }else{
+      const refuge=state.settlements.find(s=>s.owner===old&&s.id!==city.id);
+      c.location={kind:refuge?"settlement":"detained",id:refuge?refuge.id:city.id};
+      if(!refuge)state.characterStatus[c.id]="detained";
+      if(refuge)addLog(c.name+"从"+city.name+"脱身，退至"+refuge.name+"。");
+    }
+  });
   const capt=Math.min(city.pop.clan,Math.max(20,Math.round(city.pop.clan*.018)));
   city.pop.clan-=capt;city.pop.slave+=capt;city.owner=a.owner;
   city.control=38;
@@ -1569,7 +1724,7 @@ function settlementEconomy(){
     }
 
     const owner=faction(s.owner);
-    const gov=getChar(state.governors[s.id]);
+    const gov=activeGovernor(s);
     let govEco=gov?Math.max(.82,1+(gov.admin-50)/260):1;
     if(gov){
       const loyalty=characterLoyalty(gov);
@@ -1583,7 +1738,7 @@ function settlementEconomy(){
     s.weapons.bow+=Math.round(pop*.00022);
 
     if(s.forge>0&&s.bronze>5){
-      const craftGov=getChar(state.governors[s.id]);
+      const craftGov=activeGovernor(s);
       const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1)*(craftGov&&craftGov.trait==="青铜工艺"?1.15:1);
       const use=Math.min(s.bronze,Math.round(s.forge*12));
       s.bronze-=use;
@@ -1662,7 +1817,7 @@ function processLocalControl(){
     if(typeof s.control!=="number")s.control=100;
     if(s.control>=100)return;
     if(state.sieges[s.id])return;
-    const gov=getChar(state.governors[s.id]);
+    const gov=activeGovernor(s);
     const garrison=state.armies.some(function(a){return a.owner===s.owner&&a.at===s.id&&armyMen(a)>=80;});
     let gain=1.5;
     if(gov)gain+=1.5+Math.max(0,(gov.admin-55)/30);
@@ -1717,7 +1872,7 @@ function aiPrepareArmy(a){
     const c=state.characters.find(function(ch){
       return ch.faction===a.owner&&characterAvailable(ch)&&!charAssignedArmy(ch.id)&&!charAssignedSettlement(ch.id);
     });
-    if(c)a.commander=c.id;
+    if(c){a.commander=c.id;c.location={kind:"army",id:a.id};}
   }
 }
 function aiStrategicScore(owner,s){
@@ -1944,6 +2099,7 @@ function endTurn(){
     state.season++;
     if(state.season>3){state.season=0;state.year++;state.turn++;}
     populationTick();
+    processCharacterTravel();
     ageCharacters();
     refreshAllSupply();
     minorRandomEvent();
@@ -1981,6 +2137,8 @@ function handleCharacterDeath(c,cause){
   if(!c||!c.alive)return;
   const wasRuler=faction(c.faction).ruler===c.name;
   c.alive=false;
+  c.travel=null;
+  c.location={kind:"deceased",id:c.location?.id||null};
   state.characterStatus[c.id]="deceased";
   state.armies.forEach(function(a){if(a.commander===c.id)a.commander=null;});
   Object.keys(state.governors).forEach(function(id){if(state.governors[id]===c.id)delete state.governors[id];});
@@ -2087,8 +2245,8 @@ function jiliCrisisEvent(){
     body:"季历入商后，围绕是否允许其立即归周，王廷出现激烈争论。有人认为留下季历可以压制西土；也有人警告，这会把尚可维持的服属关系推向不可逆的敌对。",
     context:"后世传世文献保存有“文丁杀季历”等说法，但并非可以像同时代甲骨材料那样直接使用。本事件因此只作为玩家可能选择的历史路线，不设为必然事实。",
     choices:[
-      {label:"礼送季历归周",detail:"商周关系 +18；文丁—季历关系 +15；商威望 -2。",flag:"release",apply:function(){delete state.characterStatus.jili;changeRelation("shang","zhou",18);changeCharRelation("wen_ding","jili",15);faction("shang").prestige=Math.max(1,faction("shang").prestige-2);addLog("季历获准归周，商周关系暂时缓和。","good");}},
-      {label:"暂留季历，以观西土",detail:"季历进入拘留状态；商周关系 -28，周威望 +6。",flag:"detain",apply:function(){state.characterStatus.jili="detained";state.armies.forEach(function(a){if(a.commander==="jili")a.commander=null;});changeRelation("shang","zhou",-28);faction("zhou").prestige+=6;addLog("季历被留在大邑商，西土震动。","bad");}},
+      {label:"礼送季历归周",detail:"商周关系 +18；文丁—季历关系 +15；商威望 -2。",flag:"release",apply:function(){delete state.characterStatus.jili;jili.location={kind:"settlement",id:"zhouyuan"};changeRelation("shang","zhou",18);changeCharRelation("wen_ding","jili",15);faction("shang").prestige=Math.max(1,faction("shang").prestige-2);addLog("季历获准归周，商周关系暂时缓和。","good");}},
+      {label:"暂留季历，以观西土",detail:"季历进入拘留状态；商周关系 -28，周威望 +6。",flag:"detain",apply:function(){state.characterStatus.jili="detained";jili.location={kind:"detained",id:"yin"};jili.travel=null;state.armies.forEach(function(a){if(a.commander==="jili")a.commander=null;});changeRelation("shang","zhou",-28);faction("zhou").prestige+=6;addLog("季历被留在大邑商，西土震动。","bad");}},
       {label:"处死季历",detail:"极端路线：季历死亡，姬昌继位；商周关系降至严重敌对，并立即开战。",flag:"kill",apply:function(){handleCharacterDeath(jili,"王廷处置");setRelation("shang","zhou",-80);faction("zhou").prestige+=10;declareWar("shang","zhou",true);addLog("季历之死使商周关系彻底破裂。","bad");}}
     ]};
 }
@@ -2462,7 +2620,7 @@ function loadGame(){
     const raw=localStorage.getItem("shangzhou-save");
     if(!raw)return notice("没有找到本机存档。");
     const loaded=JSON.parse(raw);
-    if(loaded.version!==DATA.version&&loaded.version!=="1.2.0"){
+    if(![DATA.version,"1.3.0","1.2.0"].includes(loaded.version)){
       return notice("该存档来自 "+(loaded.version||"旧版本")+"，当前版本为 "+DATA.version+"。地图或人物基础数据发生过较大变化，请开始新局。","存档版本不兼容");
     }
     loaded.version=DATA.version;
@@ -2479,7 +2637,12 @@ function loadGame(){
     state.chronicle=state.chronicle||[];
     state.intel=state.intel||{};
     state.tick=state.tick||0;
-    state.settlements.forEach(function(s){if(typeof s.control!=="number")s.control=100;});
+    state.settlements.forEach(function(s){
+      if(typeof s.control!=="number")s.control=100;
+      const ref=DATA.settlements.find(x=>x.id===s.id);
+      if(ref){s.lat=ref.lat;s.lon=ref.lon;s.geographyConfidence=ref.geographyConfidence;}
+    });
+    initializeCharacterLocations();
     $("#newgame-overlay").classList.remove("show");
     $("#campaign-end-overlay").classList.toggle("show",!!state.gameOver);
     refreshAllSupply();addLog("已读取本机存档。","good");render();
@@ -2563,5 +2726,6 @@ window.SHANGZHOU_DEBUG={
 };
 
 state=freshState("shang");
+initializeCharacterLocations();
 refreshAllSupply();
 render();
