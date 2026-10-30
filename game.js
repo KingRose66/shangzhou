@@ -337,6 +337,7 @@ function render(){
   $("#hud-clansmen").textContent=fmt(t.clan);
   $("#hud-slaves").textContent=fmt(t.slave);
   renderFaction();
+  renderTurnOutlook();
   renderCharacters();
   renderMap();
   renderSettlement();
@@ -344,6 +345,7 @@ function render(){
   renderArmies();
   renderArmyDetail();
   renderTraining();
+  renderRecruitPreview();
   renderLog();
 }
 
@@ -378,6 +380,38 @@ function renderFaction(){
     '<p class="small muted">'+seasonEffectText()+'</p>'+
     '<p class="small">'+campaignObjectiveHtml()+'</p>'+
     '<p class="small muted">技艺：'+(techs||"无")+'</p>';
+}
+
+function renderTurnOutlook(){
+  const s=ownedSettlements();
+  const armies=state.armies.filter(function(a){return a.owner===state.player&&armyMen(a)>0;});
+  const t=totals();
+  const food=s.reduce(function(n,city){return n+Math.round((city.pop.clan+city.pop.slave)*.012);},0);
+  const armyFood=armies.reduce(function(n,a){
+    let use=armyMen(a)*.022+a.laborers*.009;
+    if(a.supplyState==="危险")use*=1.12;
+    if(a.supplyState==="中断")use*=1.22;
+    if(hasTech(a.owner,"long_supply"))use*=.88;
+    if(state.season===3)use*=1.08;
+    return n+use;
+  },0);
+  const harvestEstimate=state.season===2?s.reduce(function(n,city){return n+forecastHarvest(city);},0):0;
+  const net=Math.round(harvestEstimate-food-armyFood);
+  const shortages=s.filter(function(city){return city.grain<Math.round((city.pop.clan+city.pop.slave)*.012)*2;});
+  const supplyBroken=armies.filter(function(a){return a.supplyState==="中断";});
+  const laborShort=armies.filter(function(a){return a.laborers<requiredLaborers(a);});
+  const risks=[];
+  if(shortages.length)risks.push(shortages.length+"处聚落粮仓仅够不到两季");
+  if(supplyBroken.length)risks.push(supplyBroken.length+"支军队断粮道");
+  if(laborShort.length)risks.push(laborShort.length+"支军队民夫不足");
+  $("#turn-outlook").innerHTML=
+    '<div class="small"><b>本季粮食预测</b></div>'+
+    '<div class="outlook-grid"><span>民食</span><b>-'+fmt(food)+' 石</b>'+
+    '<span>军粮</span><b>-'+fmt(Math.round(armyFood))+' 石</b>'+
+    '<span>秋收</span><b>+'+fmt(harvestEstimate)+' 石</b>'+
+    '<span>预计净变动</span><b class="'+(net<0?"warning":"good")+'">'+(net>0?"+":"")+fmt(net)+' 石</b></div>'+
+    '<div class="small '+(risks.length?"warning":"muted")+'">'+(risks.length?risks.join("；"):"当前未发现迫在眉睫的粮道或民夫警报")+'</div>'+
+    '<div class="small muted">按现有粮仓、军队与季节估算；未计战斗、外交、事件及人口变化。</div>';
 }
 
 function renderCharacters(){
@@ -667,6 +701,8 @@ function renderArmyDetail(){
     $("#btn-march").disabled=true;
     $("#btn-march").textContent="行军至选中聚落";
     $("#btn-assault").disabled=true;
+    $("#btn-ready-labor").disabled=true;
+    $("#btn-load-supply").disabled=true;
     return;
   }
   const available=state.characters.filter(function(c){return c.faction===state.player&&characterAvailable(c);});
@@ -702,6 +738,9 @@ function renderArmyDetail(){
   $("#btn-march").disabled=!canMarch;
   $("#btn-march").textContent=canMarch?"行军至 "+marchTarget.name:"行军至选中聚落";
   $("#btn-assault").disabled=!siege;
+  const ownAt=getSet(a.at).owner===state.player;
+  $("#btn-ready-labor").disabled=!ownAt||a.laborers>=requiredLaborers(a);
+  $("#btn-load-supply").disabled=!ownAt;
 }
 
 function renderTraining(){
@@ -710,6 +749,32 @@ function renderTraining(){
     '<b>训练队列</b>'+queue.map(function(t){
       return '<div class="queue-card">'+getSet(t.at).name+' · '+DATA.units[t.type].name+' · 尚需 '+t.turns+' 季</div>';
     }).join(""):'<span class="muted">当前无训练队列。</span>';
+}
+
+function renderRecruitPreview(){
+  const city=getSet(state.selectedSettlement);
+  const own=!!city&&city.owner===state.player;
+  $("#recruit-context").textContent=own?"正在 "+city.name+" 征募，装备从本地库存扣除。":"请选择己方聚落征募。";
+  $("[data-unit]").forEach(function(b){
+    const u=DATA.units[b.dataset.unit];
+    if(!u)return;
+    const cost=Math.round(u.shell*(b.dataset.unit==="clan_levy"&&hasTech(state.player,"lineage_muster")?.85:1));
+    const checks=own?[
+      [city.pop[u.population]>=u.size,"人口不足"],
+      [city.weapons[u.weapon]>=u.weaponNeed,"兵器不足"],
+      [faction(state.player).shells>=cost,"贝不足"],
+      [city.grain>=u.grain,"粮食不足"],
+      [city.fodder>=u.fodder,"草料不足"]
+    ]:[];
+    const problem=!own?"非己方城邑":(checks.find(function(x){return !x[0];})||[])[1];
+    b.disabled=!!problem;
+    b.classList.toggle("unavailable",!!problem);
+    const weaponLabel={wood:"木骨兵器",bow:"弓",ge:"青铜戈",spear:"青铜矛",chariot:"战车"}[u.weapon];
+    b.innerHTML='<b>'+u.name+' · '+u.size+'</b>'+
+      '<span>'+cost+' 贝 · '+u.grain+' 石粮 · '+u.weaponNeed+weaponLabel+(u.fodder?" · 草料 "+u.fodder:"")+'</span>'+
+      '<small>'+(problem|| (u.train?"训练 "+u.train+" 季":"即时征发"))+'</small>';
+    b.title=problem?"无法征募："+problem:u.description;
+  });
 }
 
 function renderLog(){
@@ -788,6 +853,28 @@ function formUnitAt(type,at,owner){
   const d=DATA.units[type];
   a.units.push({type:type,men:d.size,morale:d.morale});
   a.morale=Math.max(a.morale,d.morale-3);
+}
+
+function readyLabor(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player)return notice("请先选择我方军队。");
+  const need=Math.max(0,requiredLaborers(a)-a.laborers);
+  if(!need)return notice("这支军队的民夫已经达到远征要求。");
+  mobilizeLabor(need);
+}
+function loadArmySupplies(){
+  const a=getArmy(state.selectedArmy),s=a?getSet(a.at):null;
+  if(!a||a.owner!==state.player)return notice("请先选择我方军队。");
+  if(!s||s.owner!==state.player)return notice("只能从本国聚落的实际仓库装载补给。");
+  const grainTarget=Math.ceil(armyMen(a)*.45+a.laborers*.018);
+  const fodderTarget=Math.ceil(chariotCount(a)*12);
+  const grain=Math.min(Math.max(0,grainTarget-a.grain),s.grain);
+  const fodder=Math.min(Math.max(0,fodderTarget-a.fodder),s.fodder);
+  if(!grain&&!fodder)return notice("军队补给已足，或该地仓库无粮草可装。");
+  s.grain-=grain;s.fodder-=fodder;
+  a.grain+=grain;a.fodder+=fodder;
+  addLog(a.name+"从"+s.name+"装载 "+Math.round(grain)+" 石军粮、"+Math.round(fodder)+" 草料。","good");
+  render();
 }
 
 function mobilizeLabor(amount){
@@ -1025,11 +1112,13 @@ function moveArmy(a,targetId,after){
   if(!origin.roads.includes(targetId))return notice("只能沿相邻道路或通道行军。");
   const need=requiredLaborers(a);
   if(a.laborers<need)return notice(a.name+"民夫不足。当前 "+a.laborers+"，至少需要 "+need+" 人。");
+  const cost=marchCost(a,dest);
+  if(a.grain<cost.grain)return notice("随军粮不足，至少需要约 "+Math.ceil(cost.grain)+" 石才能行军。请先从本地粮仓装载。");
+  if(a.fodder<cost.fodder)return notice("草料不足，需要约 "+Math.ceil(cost.fodder)+" 草料才能保证战车完成这段行军。");
   if(dest.owner!==a.owner&&!isAtWar(a.owner,dest.owner)&&!hasMilitaryAccess(a.owner,dest.owner)){
+    if(!confirm("进入"+dest.name+"将向"+ownerName(dest.owner)+"正式宣战。确认行军并宣战吗？"))return;
     declareWar(a.owner,dest.owner,true);
   }
-  const cost=marchCost(a,dest);
-  if(a.grain<cost.grain)return notice("随军粮不足，至少需要约 "+Math.ceil(cost.grain)+" 石才能行军。");
 
   a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);
   a.previous=origin.id;a.at=targetId;
@@ -2282,6 +2371,8 @@ $("#encounter-command").onclick=commandPendingEncounter;
 $("#encounter-auto").onclick=autoPendingEncounter;
 $("#encounter-retreat").onclick=retreatPendingEncounter;
 $("#btn-march").onclick=marchSelectedArmy;
+$("#btn-ready-labor").onclick=readyLabor;
+$("#btn-load-supply").onclick=loadArmySupplies;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#btn-assault").onclick=assaultCurrentSiege;
