@@ -755,7 +755,7 @@ function renderRecruitPreview(){
   const city=getSet(state.selectedSettlement);
   const own=!!city&&city.owner===state.player;
   $("#recruit-context").textContent=own?"正在 "+city.name+" 征募，装备从本地库存扣除。":"请选择己方聚落征募。";
-  $("[data-unit]").forEach(function(b){
+  document.querySelectorAll("[data-unit]").forEach(function(b){
     const u=DATA.units[b.dataset.unit];
     if(!u)return;
     const cost=Math.round(u.shell*(b.dataset.unit==="clan_levy"&&hasTech(state.player,"lineage_muster")?.85:1));
