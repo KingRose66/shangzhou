@@ -25,5 +25,7 @@ jobs:
         run: node scripts/battle-logic.mjs
       - name: Character succession and events
         run: node scripts/character-events.mjs
+      - name: Geographic map and character placement regression
+        run: node scripts/geography-characters.mjs
       - name: Gameplay logistics and autonomous battle regression
         run: node scripts/gameplay-regression.mjs
