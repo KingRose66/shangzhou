@@ -6,6 +6,8 @@
       this.ctx = this.canvas.getContext("2d");
       this.status = document.getElementById("battle-status");
       this.detail = document.getElementById("battle-unit-detail");
+      this.advanceBtn = document.getElementById("battle-advance");
+      this.holdBtn = document.getElementById("battle-hold");
       this.pauseBtn = document.getElementById("battle-pause");
       this.speedBtn = document.getElementById("battle-speed");
       this.retreatBtn = document.getElementById("battle-retreat");
@@ -24,6 +26,8 @@
     bind(){
       this.canvas.addEventListener("click", e => this.handleClick(e));
       this.canvas.addEventListener("contextmenu", e => { e.preventDefault(); this.handleOrder(e); });
+      this.advanceBtn.onclick = () => this.orderAll("advance");
+      this.holdBtn.onclick = () => this.orderAll("hold");
       this.pauseBtn.onclick = () => {
         this.paused = !this.paused;
         this.pauseBtn.textContent = this.paused ? "继续" : "暂停";
@@ -60,7 +64,7 @@
       this.buildArmy(config.playerArmy, "player", config.playerArmy.owner === config.attacker.owner);
       this.buildArmy(config.enemyArmy, "enemy", config.enemyArmy.owner === config.attacker.owner);
       this.status.textContent = `${config.locationName} · ${config.terrainName} · 右键下达移动/攻击命令`;
-      this.detail.innerHTML = "点击己方单位查看状态。";
+      this.detail.innerHTML = "部队默认坚守并会自主迎击近敌；也可下达全军推进或单队指令。";
       requestAnimationFrame(t => this.loop(t));
     }
 
@@ -118,7 +122,7 @@
         const unit = {
           uid: `${side}-${idx}`, sourceIndex:idx, armyId:army.id, type:u.type,
           name:def.name, side, x:baseX + dir*(col*54), y:this.h*.25 + row*72,
-          tx:null,ty:null,targetEnemy:null,
+          tx:null,ty:null,targetEnemy:null,orderMode:"hold",guardX:baseX + dir*(col*54),guardY:this.h*.25 + row*72,chargeMomentum:0,
           men:u.men,maxMen:u.men,
           morale:Math.min(95,(u.morale || def.morale) + (commander ? Math.round((commander.command-50)*.18) : 0)+traitMorale),
           order:Math.min(95,def.order+traitOrder), fatigue:4,
@@ -184,11 +188,57 @@
         if(d<42&&d<dist){enemy=u;dist=d}
       }
       if(enemy){
+        this.selected.orderMode="manual";
         this.selected.targetEnemy=enemy;
         this.selected.tx=null;this.selected.ty=null;
       }else{
+        this.selected.orderMode="move";
         this.selected.targetEnemy=null;
         this.selected.tx=p.x;this.selected.ty=p.y;
+        this.selected.guardX=p.x;this.selected.guardY=p.y;
+      }
+    }
+
+    orderAll(mode){
+      if(!this.running)return;
+      const enemies=this.units.filter(x=>x.side==="enemy"&&x.men>0&&!x.routed);
+      for(const u of this.units.filter(x=>x.side==="player"&&x.men>0&&!x.routed)){
+        u.orderMode=mode;
+        u.tx=null;u.ty=null;u.targetEnemy=null;
+        if(mode==="advance"&&enemies.length){
+          u.targetEnemy=enemies.reduce((a,b)=>
+            Math.hypot(a.x-u.x,a.y-u.y)<=Math.hypot(b.x-u.x,b.y-u.y)?a:b);
+        }
+      }
+      this.status.textContent=this.config.locationName+" · "+(mode==="advance"?"全军推进，仍可单独命令侧击":"全军坚守，接近阵线的敌军将被自动迎击");
+    }
+
+    playerOrders(){
+      const enemies=this.units.filter(x=>x.side==="enemy"&&x.men>0&&!x.routed);
+      for(const u of this.units.filter(x=>x.side==="player"&&x.men>0&&!x.routed)){
+        if(u.orderMode==="manual"){
+          if(!u.targetEnemy||u.targetEnemy.men<=0||u.targetEnemy.routed)u.orderMode="hold";
+          else continue;
+        }
+        if(u.orderMode==="move")continue;
+        if(!enemies.length){u.targetEnemy=null;continue;}
+        const nearest=enemies.reduce((a,b)=>
+          Math.hypot(a.x-u.x,a.y-u.y)<=Math.hypot(b.x-u.x,b.y-u.y)?a:b);
+        if(u.orderMode==="advance"){
+          u.targetEnemy=nearest;u.tx=null;u.ty=null;
+          continue;
+        }
+        const distance=Math.hypot(nearest.x-u.x,nearest.y-u.y);
+        const guardDistance=Math.hypot(nearest.x-u.guardX,nearest.y-u.guardY);
+        const engageRadius=u.missile>0?Math.min(u.range,200):115;
+        if(distance<=engageRadius && guardDistance<=engageRadius+25){
+          u.targetEnemy=nearest;u.tx=null;u.ty=null;
+        }else{
+          u.targetEnemy=null;
+          if(Math.hypot(u.x-u.guardX,u.y-u.guardY)>18){
+            u.tx=u.guardX;u.ty=u.guardY;
+          }else{u.tx=null;u.ty=null;}
+        }
       }
     }
 
@@ -205,7 +255,7 @@
         const dt=raw*this.speed;
         this.update(dt);
         this.aiClock+=dt;
-        if(this.aiClock>.7){this.aiClock=0;this.aiOrders()}
+        if(this.aiClock>.7){this.aiClock=0;this.aiOrders();this.playerOrders()}
       }
       this.draw();
       requestAnimationFrame(x=>this.loop(x));
@@ -260,7 +310,8 @@
     update(dt){
       const alive=this.units.filter(u=>u.men>0);
       alive.forEach(u=>{
-        u.engaged=false;
+        u.engaged=false;u.moving=false;
+        u.chargeMomentum=Math.max(0,(u.chargeMomentum||0)-dt);
         u.attackCd-=dt;u.missileCd-=dt;
         if(u.routed){
           const fleeX=u.side==="player"?-80:this.w+80;
@@ -295,7 +346,10 @@
           }
         }else if(u.tx!==null){
           if(Math.hypot(u.tx-u.x,u.ty-u.y)>9)this.moveToward(u,u.tx,u.ty,dt,false);
-          else {u.tx=null;u.ty=null;u.moving=false}
+          else {
+            u.tx=null;u.ty=null;u.moving=false;
+            if(u.orderMode==="move")u.orderMode="hold";
+          }
         }
         if(u.engaged) u.fatigue=Math.min(100,u.fatigue+dt*2.6);
         else if(u.moving) u.fatigue=Math.min(100,u.fatigue+dt*.5);
@@ -317,6 +371,7 @@
       u.x+=dx/d*speed*dt;u.y+=dy/d*speed*dt;
       u.facing=Math.atan2(dy,dx);
       u.moving=true;u.lastMoveSpeed=speed;
+      if(speed>43)u.chargeMomentum=.65;
       u.x=Math.max(-100,Math.min(this.w+100,u.x));u.y=Math.max(20,Math.min(this.h-20,u.y));
       if(u.type==="chariot" && this.terrainAt(u)==="forest")u.order=Math.max(15,u.order-dt*2.4);
     }
@@ -350,7 +405,8 @@
       let charge=1;
 
       const goodChariotGround=!["forest","mud","hill","rampart","ditch"].includes(this.terrainAt(a));
-      if(a.type==="chariot" && a.lastMoveSpeed>45 && goodChariotGround){
+      const charged=(a.chargeMomentum===undefined?a.lastMoveSpeed>45:a.chargeMomentum>.12);
+      if(a.type==="chariot" && charged && goodChariotGround){
         if(d.type==="bronze_spear" && direction==="front"){
           charge=.92;
           const counterLoss=Math.max(0,Math.round((d.men/d.maxMen)*1.3));
