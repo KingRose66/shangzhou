@@ -541,7 +541,7 @@ function renderCharacters(){
       (characterAvailable(c)&&!c.travel?'<button type="button" class="char-transfer" data-char-transfer="'+c.id+'">调往当前选中城邑</button>':'')+
     '</div>';
   }).join("");
-  $("[data-char-transfer]").forEach(function(b){
+  document.querySelectorAll("[data-char-transfer]").forEach(function(b){
     b.onclick=function(){moveCharacter(b.dataset.charTransfer);};
   });
 }
