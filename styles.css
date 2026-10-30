@@ -181,3 +181,16 @@ dialog::backdrop{background:#0009}
 .battle-report-force b{display:block;margin:3px 0}
 .battle-report-loss{font-size:18px;color:#d4b071}
 .battle-report-card>button{width:100%;margin-top:12px}
+
+/* v1.3: decision support and visible recruitment requirements */
+.turn-outlook{margin-top:13px;padding:12px;border:1px solid rgba(174,146,94,.31);border-radius:8px;background:rgba(18,16,13,.5);display:grid;gap:7px}
+.outlook-grid{display:grid;grid-template-columns:1fr auto;gap:5px 12px;font-size:12px;line-height:1.35}
+.outlook-grid>span{color:#ac9c83}
+.outlook-grid>b{text-align:right;font-variant-numeric:tabular-nums;color:#ebd7ab}
+.recruit-grid button{min-height:75px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;text-align:left;padding:10px}
+.recruit-grid button b{font-weight:700;font-size:13px}
+.recruit-grid button span{font-size:10px;opacity:.81;line-height:1.4}
+.recruit-grid button small{font-size:10px;color:#bfa774}
+.recruit-grid button.unavailable{opacity:.48;filter:saturate(.4);cursor:not-allowed}
+.recruit-grid button.unavailable small{color:#c2a094}
+#recruit-context{margin-bottom:8px}
