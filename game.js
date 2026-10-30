@@ -9,6 +9,7 @@ let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
 let pendingBattleReport = null;
+const geoMapView={lon:111.62,lat:34.04,zoomDelta:0,mode:'imagery'};
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -427,109 +428,268 @@ function renderCharacters(){
   }).join("");
 }
 
-function routeLine(a,b,map,blocked,supply){
-  const r=document.createElement("div"),dx=b.x-a.x,dy=b.y-a.y;
-  r.className="route"+(blocked?" blocked":"")+(supply?" supply-route":"");
-  r.style.left=a.x+"%";r.style.top=a.y+"%";
-  r.style.width=Math.hypot(dx/100*map.clientWidth,dy/100*map.clientHeight)+"px";
-  r.style.transform="rotate("+Math.atan2(dy/100*map.clientHeight,dx/100*map.clientWidth)*180/Math.PI+"deg)";
-  map.appendChild(r);
+// Geographic projection: WGS84 coordinates on Web Mercator raster terrain.
+const GEO_TILE_SOURCES={
+  imagery:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/",
+  relief:"https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/"
+};
+function geoWorld(lon,lat,zoom){
+  const size=256*Math.pow(2,zoom);
+  const rad=Math.max(-85,Math.min(85,lat))*Math.PI/180;
+  return {x:(lon+180)/360*size,y:(1-Math.log(Math.tan(rad)+1/Math.cos(rad))/Math.PI)/2*size};
 }
-function nodeBlocked(id,owner){
-  return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
+function geoLonLat(x,y,zoom){
+  const size=256*Math.pow(2,zoom);
+  const n=Math.PI*(1-2*y/size);
+  return {lon:x/size*360-180,lat:180/Math.PI*Math.atan(Math.sinh(n))};
 }
-function renderTerrainBackdrop(map){
-  const wrap=document.createElement("div");
-  wrap.className="terrain-backdrop";
-  wrap.innerHTML=
-    '<svg viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">'+
-      '<defs>'+
-        '<linearGradient id="riverFade" x1="0" x2="1"><stop offset="0" stop-color="#668b91"/><stop offset="1" stop-color="#466f78"/></linearGradient>'+
-        '<pattern id="ridge" width="22" height="14" patternUnits="userSpaceOnUse"><path d="M0 14 L11 2 L22 14" fill="none" stroke="rgba(164,143,102,.24)" stroke-width="2"/></pattern>'+
-      '</defs>'+
-      '<path class="river major" d="M40,304 C155,300 215,348 330,331 C430,315 452,278 535,292 C640,311 690,275 790,266 C875,258 920,279 990,292"/>'+
-      '<path class="river" d="M92,338 C180,356 252,356 325,347 C378,340 410,325 454,315"/>'+
-      '<path class="river" d="M754,423 C824,409 880,406 995,420"/>'+
-      '<path class="river major" d="M515,520 C620,515 706,528 790,548 C866,565 932,561 995,552"/>'+
-      '<path class="river" d="M682,438 C674,475 676,504 697,531"/>'+
-      '<path class="mountain-area" d="M566,112 C610,126 642,163 650,221 C655,269 635,326 617,373 C603,408 590,438 570,458 L530,444 C552,390 558,343 565,288 C571,229 556,170 566,112 Z"/>'+
-      '<path class="mountain-area qinling" d="M230,430 C330,416 430,425 548,444 C616,455 664,462 710,468 L694,501 C585,486 475,475 372,478 C304,480 252,471 214,459 Z"/>'+
-      '<rect x="0" y="0" width="1000" height="600" fill="url(#ridge)" opacity=".15"/>'+
-      '<text class="geo-label" x="515" y="270">黄河</text>'+
-      '<text class="geo-label" x="245" y="345">渭水</text>'+
-      '<text class="geo-label" x="820" y="408">淮水</text>'+
-      '<text class="geo-label" x="835" y="548">大江</text>'+
-      '<text class="geo-label land" x="598" y="218">太行</text>'+
-      '<text class="geo-label land" x="435" y="465">秦岭</text>'+
-      '<text class="region-label" x="745" y="215">王 畿</text>'+
-      '<text class="region-label" x="260" y="250">西 土</text>'+
-      '<text class="region-label" x="900" y="350">东 土</text>'+
-      '<text class="region-label" x="690" y="565">南 土</text>'+
-    '</svg>';
-  map.appendChild(wrap);
+function geographicMapMetrics(el){
+  const w=el.clientWidth||960,h=el.clientHeight||625;
+  const world=state.settlements.map(s=>geoWorld(s.lon,s.lat,0));
+  const minX=Math.min(...world.map(p=>p.x)),maxX=Math.max(...world.map(p=>p.x));
+  const minY=Math.min(...world.map(p=>p.y)),maxY=Math.max(...world.map(p=>p.y));
+  const fitZoom=Math.log2(Math.min((w-110)/(maxX-minX),(h-100)/(maxY-minY)));
+  const zoom=Math.max(4.1,Math.min(8.5,fitZoom+geoMapView.zoomDelta));
+  const center=geoWorld(geoMapView.lon,geoMapView.lat,zoom);
+  return {w,h,zoom,center};
 }
-function renderMap(){
-  const map=$("#map");map.innerHTML="";
-  renderTerrainBackdrop(map);
-  const selectedSupplyEdges=new Set();
-  const selectedSupplyArmy=getArmy(state.selectedArmy);
-  if(selectedSupplyArmy&&selectedSupplyArmy.owner===state.player){
-    const p=selectedSupplyArmy.supplyPath||[];
-    for(let i=0;i<p.length-1;i++)selectedSupplyEdges.add([p[i],p[i+1]].sort().join("-"));
+function geoScreenPosition(lon,lat,m){
+  const p=geoWorld(lon,lat,m.zoom);
+  return {x:p.x-m.center.x+m.w/2,y:p.y-m.center.y+m.h/2};
+}
+function mapEl(tag,cls,x,y,text){
+  const e=document.createElement(tag);
+  e.className=cls;
+  e.style.left=x+"px";e.style.top=y+"px";
+  if(text!==undefined)e.textContent=text;
+  return e;
+}
+function realTerrainTiles(parent,m){
+  const layer=document.createElement("div");
+  layer.className="geographic-tiles "+(geoMapView.mode==="relief"?"relief-tiles":"imagery-tiles");
+  const zoom=Math.max(0,Math.floor(m.zoom));
+  const scale=Math.pow(2,m.zoom-zoom);
+  const tileSize=256*scale;
+  const n=Math.pow(2,zoom);
+  const startX=Math.floor((m.center.x-m.w/2)/tileSize)-1;
+  const endX=Math.ceil((m.center.x+m.w/2)/tileSize);
+  const startY=Math.floor((m.center.y-m.h/2)/tileSize)-1;
+  const endY=Math.ceil((m.center.y+m.h/2)/tileSize);
+  let errors=0;
+  const tileBase=GEO_TILE_SOURCES[geoMapView.mode];
+  for(let ty=startY;ty<=endY;ty++){
+    if(ty<0||ty>=n)continue;
+    for(let tx=startX;tx<=endX;tx++){
+      const img=document.createElement("img");
+      img.className="geographic-tile";
+      img.alt="";
+      img.draggable=false;
+      img.decoding="async";
+      img.loading="eager";
+      img.src=tileBase+zoom+"/"+ty+"/"+((tx%n+n)%n);
+      img.style.width=(tileSize+1)+"px";
+      img.style.height=(tileSize+1)+"px";
+      img.style.left=(tx*tileSize-(m.center.x-m.w/2))+"px";
+      img.style.top=(ty*tileSize-(m.center.y-m.h/2))+"px";
+      img.onerror=function(){
+        this.classList.add("tile-unavailable");
+        if(++errors===3){
+          const tip=parent.querySelector(".tile-notice");
+          if(tip)tip.style.display="block";
+        }
+      };
+      layer.appendChild(img);
+    }
   }
+  parent.appendChild(layer);
+  const wash=document.createElement("div");
+  wash.className="geographic-wash";
+  parent.appendChild(wash);
+}
+function geographicRoutes(map,m,selectedEdges){
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("class","geographic-routes");
+  svg.setAttribute("viewBox","0 0 "+m.w+" "+m.h);
+  svg.setAttribute("aria-hidden","true");
   const seen=new Set();
-  state.settlements.forEach(function(a){
-    a.roads.forEach(function(id){
-      const b=getSet(id),key=[a.id,b.id].sort().join("-");
-      if(!seen.has(key)){
-        seen.add(key);
-        routeLine(a,b,map,nodeBlocked(a.id,state.player)||nodeBlocked(b.id,state.player),selectedSupplyEdges.has(key));
-      }
+  state.settlements.forEach(function(s){
+    s.roads.forEach(function(id){
+      const k=[s.id,id].sort().join("-");
+      if(seen.has(k))return;
+      seen.add(k);
+      const t=getSet(id),a=geoScreenPosition(s.lon,s.lat,m),b=geoScreenPosition(t.lon,t.lat,m);
+      const supply=selectedEdges.has(k),blocked=nodeBlocked(s.id,state.player)||nodeBlocked(t.id,state.player);
+      const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+      const curve=Math.min(12,Math.hypot(b.x-a.x,b.y-a.y)*.08);
+      const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
+      const mx=(a.x+b.x)/2-dy/dist*curve,my=(a.y+b.y)/2+dx/dist*curve;
+      p.setAttribute("d","M "+a.x+" "+a.y+" Q "+mx+" "+my+" "+b.x+" "+b.y);
+      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":""));
+      svg.appendChild(p);
     });
   });
-
-  const supplyNodes=new Set();
-  state.armies.filter(function(a){return a.owner===state.player;}).forEach(function(a){
-    (a.supplyPath||[]).forEach(function(x){supplyNodes.add(x);});
-  });
-
-  state.settlements.forEach(function(s){
-    const n=document.createElement("div");
-    n.className="node "+s.owner+(s.capital?" capital":"")+(state.selectedSettlement===s.id?" selected":"")+(supplyNodes.has(s.id)?" supply":"");
-    n.style.left=s.x+"%";n.style.top=s.y+"%";
-    n.dataset.settlementId=s.id;
-    n.setAttribute("aria-label",s.name);
-    n.title=s.name+"｜"+terrainNames[s.terrain]+"｜史实级别 "+s.confidence;
-    n.onclick=function(){selectSettlement(s.id);};
-    map.appendChild(n);
-
-    const l=document.createElement("div");
-    l.className="node-label";l.style.left=s.x+"%";l.style.top=s.y+"%";l.textContent=s.name;map.appendChild(l);
-    const meta=document.createElement("div");
-    meta.className="node-meta";meta.style.left=s.x+"%";meta.style.top=s.y+"%";
-    meta.textContent=ownerName(s.owner)+" · "+terrainNames[s.terrain];map.appendChild(meta);
-  });
-
-  state.armies.forEach(function(a,i){
-    if(armyMen(a)<=0)return;
-    const s=getSet(a.at);
-    if(a.owner!==state.player&&intelLevel(s)<=0)return;
-    const e=document.createElement("div");
-    e.className="army-token "+(a.owner===state.player?"":isHostile(state.player,a.owner)?"enemy":"foreign")+(state.selectedArmy===a.id?" selected":"");
-    e.style.left=(s.x+2+(i%2)*2)+"%";e.style.top=(s.y-4-(i%3)*2)+"%";
-    if(a.owner===state.player){
-      e.textContent=faction(a.owner).short+"军 "+armyMen(a);
-      e.title=a.name+"｜粮道 "+a.supplyState;
-      e.onclick=function(ev){ev.stopPropagation();selectArmy(a.id);};
-    }else{
-      const lvl=intelLevel(s);
-      const shown=lvl>=3?fmt(armyMen(a)):lvl===2?"约"+fmt(roughNumber(armyMen(a),100)):"兵力不详";
-      e.textContent=faction(a.owner).short+"军 "+shown;
-      e.title=lvl>=2?a.name+"｜估计兵力 "+shown:(isHostile(state.player,a.owner)?"发现敌军活动":"发现外国军队活动");
-      e.onclick=function(ev){ev.stopPropagation();state.selectedSettlement=s.id;render();};
-    }
+  map.appendChild(svg);
+}
+function addGeographyLabels(map,m){
+  [
+    {name:"黄土高原",lon:108.4,lat:37.2},
+    {name:"关中盆地",lon:108.2,lat:33.9},
+    {name:"太行山地",lon:112.4,lat:38.3},
+    {name:"华北平原",lon:115.7,lat:35.8},
+    {name:"秦岭",lon:108.8,lat:33.6},
+    {name:"江汉平原",lon:113.7,lat:30.4},
+    {name:"成都平原",lon:103.9,lat:30.25}
+  ].forEach(function(p){
+    const xy=geoScreenPosition(p.lon,p.lat,m);
+    if(xy.x<30||xy.x>m.w-30||xy.y<24||xy.y>m.h-24)return;
+    const e=mapEl("div","geography-label",xy.x,xy.y,p.name);
     map.appendChild(e);
   });
+}
+function createMapControls(map){
+  const controls=document.createElement("div");
+  controls.className="geo-map-controls";
+  const controlsData=[
+    ["+","放大",function(){geoMapView.zoomDelta=Math.min(2.6,geoMapView.zoomDelta+.45);renderMap();}],
+    ["−","缩小",function(){geoMapView.zoomDelta=Math.max(-1.6,geoMapView.zoomDelta-.45);renderMap();}],
+    ["全图","复位",function(){geoMapView.zoomDelta=0;geoMapView.lon=111.62;geoMapView.lat=34.04;renderMap();}],
+    [geoMapView.mode==="imagery"?"地形":"卫星","切换真实地形与卫星影像",function(){
+      geoMapView.mode=geoMapView.mode==="imagery"?"relief":"imagery";renderMap();
+    }]
+  ];
+  controlsData.forEach(function(x){
+    const btn=document.createElement("button");
+    btn.type="button";btn.textContent=x[0];btn.title=x[1];btn.onclick=function(e){e.stopPropagation();x[2]();};
+    controls.appendChild(btn);
+  });
+  map.appendChild(controls);
+}
+function setupGeographicInteraction(map,m){
+  let dragging=null;
+  map.onpointerdown=function(e){
+    if(e.target.closest(".geo-node, .map-army, .map-person, .geo-map-controls"))return;
+    dragging={x:e.clientX,y:e.clientY,lon:geoMapView.lon,lat:geoMapView.lat};
+    map.classList.add("panning");
+  };
+  map.onpointermove=function(e){
+    if(!dragging)return;
+    const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;
+    const scene=map.querySelector(".geo-map-scene");
+    if(scene)scene.style.transform="translate("+dx+"px,"+dy+"px)";
+  };
+  const finish=function(e){
+    if(!dragging)return;
+    const center=geoWorld(dragging.lon,dragging.lat,m.zoom);
+    const next=geoLonLat(center.x-(e.clientX-dragging.x),center.y-(e.clientY-dragging.y),m.zoom);
+    geoMapView.lon=Math.max(101,Math.min(121,next.lon));
+    geoMapView.lat=Math.max(26,Math.min(41,next.lat));
+    dragging=null;
+    map.classList.remove("panning");
+    renderMap();
+  };
+  map.onpointerup=finish;
+  map.onpointercancel=function(){dragging=null;map.classList.remove("panning");renderMap();};
+  map.onwheel=function(e){
+    e.preventDefault();
+    geoMapView.zoomDelta=Math.max(-1.6,Math.min(2.6,geoMapView.zoomDelta+(e.deltaY<0?.35:-.35)));
+    renderMap();
+  };
+}
+function renderMap(){
+  const map=$("#map");
+  map.innerHTML="";
+  map.classList.add("geographic-map");
+  const m=geographicMapMetrics(map);
+  const scene=document.createElement("div");
+  scene.className="geo-map-scene";
+  map.appendChild(scene);
+  realTerrainTiles(scene,m);
+  const selectedEdges=new Set();
+  const supplyArmy=getArmy(state.selectedArmy);
+  if(supplyArmy&&supplyArmy.owner===state.player){
+    const path=supplyArmy.supplyPath||[];
+    for(let i=1;i<path.length;i++)selectedEdges.add([path[i-1],path[i]].sort().join("-"));
+  }
+  geographicRoutes(scene,m,selectedEdges);
+  addGeographyLabels(scene,m);
+
+  const supplyNodes=new Set();
+  state.armies.filter(a=>a.owner===state.player).forEach(a=>(a.supplyPath||[]).forEach(id=>supplyNodes.add(id)));
+  // Keep city names in one readable layer; no second row of faction/terrain metadata.
+  const usedLabels=[];
+  const cityByPriority=state.settlements.slice().sort((a,b)=>
+    Number(!!b.capital)-Number(!!a.capital)||Number(b.id===state.selectedSettlement)-Number(a.id===state.selectedSettlement));
+  cityByPriority.forEach(function(s){
+    const p=geoScreenPosition(s.lon,s.lat,m);
+    if(p.x<-30||p.x>m.w+30||p.y<-30||p.y>m.h+30)return;
+    const node=mapEl("button","node geo-node "+s.owner+(s.capital?" capital":"")+
+      (state.selectedSettlement===s.id?" selected":"")+(supplyNodes.has(s.id)?" supply":""),p.x,p.y);
+    node.type="button";node.style.setProperty("--faction-color",faction(s.owner).color);
+    node.dataset.settlementId=s.id;node.setAttribute("aria-label",s.name);
+    node.title=s.name+" · "+ownerName(s.owner)+" · "+s.region+"（位置 "+s.geographyConfidence+"）";
+    node.textContent=s.capital?"◆":"";
+    node.onclick=function(e){e.stopPropagation();selectSettlement(s.id);};
+    scene.appendChild(node);
+    const width=Math.min(170,15+s.name.length*12);
+    const positions=[
+      {x:p.x+12,y:p.y-20},
+      {x:p.x-width/2,y:p.y+13},
+      {x:p.x-width-12,y:p.y-21},
+      {x:p.x+12,y:p.y+17}
+    ];
+    const preference=positions.find(q=>{
+      const box={x:q.x-4,y:q.y-3,w:width+8,h:20};
+      if(box.x<3||box.x+box.w>m.w-3||box.y<3||box.y+box.h>m.h-3)return false;
+      if(usedLabels.some(t=>box.x<t.x+t.w&&box.x+box.w>t.x&&box.y<t.y+t.h&&box.y+box.h>t.y))return false;
+      usedLabels.push(box);return true;
+    });
+    if(preference){
+      const label=mapEl("div","node-label geo-label"+(s.capital?" capital-label":""),preference.x,preference.y,s.name);
+      label.title=s.name;
+      scene.appendChild(label);
+    }
+  });
+
+  const personBySettlement={};
+  state.characters.filter(c=>c.alive&&c.faction===state.player).forEach(function(c){
+    const where=characterPosition(c);
+    if(where&&where.kind==="settlement")personBySettlement[where.id]=(personBySettlement[where.id]||0)+1;
+  });
+  Object.keys(personBySettlement).forEach(function(id){
+    const s=getSet(id);if(!s)return;
+    const p=geoScreenPosition(s.lon,s.lat,m);
+    const badge=mapEl("button","map-person",p.x-20,p.y-16,"人"+personBySettlement[id]);
+    badge.title=s.name+" 驻地人物 "+personBySettlement[id]+" 名";
+    badge.onclick=function(e){e.stopPropagation();selectSettlement(id);};
+    scene.appendChild(badge);
+  });
+  state.armies.forEach(function(a,i){
+    if(armyMen(a)<=0)return;
+    const s=getSet(a.at);if(!s)return;
+    if(a.owner!==state.player&&intelLevel(s)<=0)return;
+    const p=geoScreenPosition(s.lon,s.lat,m);
+    const army=mapEl("button","army-token map-army "+(a.owner===state.player?"friendly":isHostile(state.player,a.owner)?"enemy":"foreign")+
+      (a.id===state.selectedArmy?" selected":""),p.x+18+(i%3)*10,p.y+18+(i%2)*11);
+    const count=a.owner===state.player?fmt(armyMen(a)):intelLevel(s)>=3?fmt(armyMen(a)):intelLevel(s)===2?"约"+fmt(roughNumber(armyMen(a),100)):"？";
+    army.type="button";army.textContent="⚑ "+count;
+    army.title=a.name+" · "+s.name+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
+    army.onclick=function(e){
+      e.stopPropagation();
+      if(a.owner===state.player)selectArmy(a.id);
+      else{state.selectedSettlement=s.id;render();}
+    };
+    scene.appendChild(army);
+  });
+  createMapControls(map);
+  const cite=document.createElement("div");
+  cite.className="terrain-attribution";
+  cite.innerHTML='真实现代地貌底图 · © Esri / USGS / NASA　·　城邑部分为考古近似位置，势力疆域非历史实测';
+  map.appendChild(cite);
+  const noticeEl=document.createElement("div");
+  noticeEl.className="tile-notice";
+  noticeEl.textContent="地形影像暂时无法加载。请检查网络；战略节点仍可操作。";
+  map.appendChild(noticeEl);
+  setupGeographicInteraction(map,m);
 }
 
 function selectSettlement(id){
