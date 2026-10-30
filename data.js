@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "1.3.0",
+  version: "1.4.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
@@ -299,3 +299,123 @@ const GAME_DATA = {
 };
 
 window.GAME_DATA = GAME_DATA;
+/*
+ * Geography layer: WGS84 geographic anchors used by the modern relief/satellite basemap.
+ * A = securely located archaeological site, B = approximate archaeological region,
+ * C = composite gameplay settlement placed in its plausible geographical corridor.
+ * These are NOT claims about exact late-Shang political boundaries or river courses.
+ */
+const SHANGZHOU_GEO_ANCHORS = {
+  "yin": [
+    36.1267,
+    114.3139,
+    "A"
+  ],
+  "taihang": [
+    37.18,
+    113.53,
+    "C"
+  ],
+  "nan": [
+    35.34,
+    114.17,
+    "C"
+  ],
+  "jinnan": [
+    35.62,
+    111.42,
+    "C"
+  ],
+  "crossing": [
+    35.46,
+    110.45,
+    "C"
+  ],
+  "gaodi": [
+    37.11,
+    110.14,
+    "B"
+  ],
+  "zhouyuan": [
+    34.48,
+    107.77,
+    "B"
+  ],
+  "weis": [
+    34.43,
+    109.35,
+    "C"
+  ],
+  "west": [
+    34.68,
+    106.56,
+    "C"
+  ],
+  "lijia": [
+    38.14,
+    110.55,
+    "B"
+  ],
+  "north": [
+    39.18,
+    112.75,
+    "C"
+  ],
+  "laoniupo": [
+    34.24,
+    109.12,
+    "B"
+  ],
+  "daxinzhuang": [
+    36.67,
+    117.03,
+    "B"
+  ],
+  "qianzhangda": [
+    34.89426,
+    117.21317,
+    "A"
+  ],
+  "haidai": [
+    36.38,
+    119.11,
+    "C"
+  ],
+  "huaibei": [
+    33.52,
+    116.57,
+    "C"
+  ],
+  "nanyang": [
+    33.08,
+    112.54,
+    "C"
+  ],
+  "jianghan": [
+    30.75,
+    112.45,
+    "C"
+  ],
+  "wucheng": [
+    28.17,
+    115.45,
+    "B"
+  ],
+  "hanzhong": [
+    33.06,
+    107.03,
+    "C"
+  ],
+  "shu": [
+    30.95,
+    104.15,
+    "C"
+  ]
+};
+window.GAME_DATA.settlements.forEach(function(settlement){
+  const anchor=SHANGZHOU_GEO_ANCHORS[settlement.id];
+  if(!anchor)throw new Error("No geographic anchor for "+settlement.id);
+  settlement.lat=anchor[0];
+  settlement.lon=anchor[1];
+  settlement.geographyConfidence=anchor[2];
+});
