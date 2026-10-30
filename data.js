@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "1.2.0",
+  version: "1.3.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
