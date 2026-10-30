@@ -528,7 +528,7 @@ function renderCharacters(){
   $("#characters").innerHTML=chars.map(function(c){
     const army=charAssignedArmy(c.id),gov=charAssignedSettlement(c.id),loyalty=characterLoyalty(c),status=state.characterStatus[c.id];
     const pos=characterPosition(c);
-    const locationText=c.travel?"调动中 → "+getSet(c.travel.destination)?.name:
+    const locationText=c.travel?"途经："+(getSet(c.location?.id)?.name||"途中")+" → "+(getSet(c.travel.destination)?.name||"目的地")+"（余 "+c.travel.path.length+" 季）":
       pos?.kind==="army"?"随军："+(getArmy(pos.id)?.name||"失散军队")+"（"+(getSet(pos.settlement)?.name||"") +"）":
       pos?.kind==="detained"?"被拘留："+(getSet(pos.id)?.name||"未知"):
       "驻于："+(getSet(pos?.id)?.name||"未知");
