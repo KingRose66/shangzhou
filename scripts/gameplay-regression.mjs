@@ -14,7 +14,13 @@ window.HTMLCanvasElement.prototype.getContext=function(){
   return new Proxy({}, {get(_t,k){return k==="measureText"?()=>({width:10}):fn},set(){return true}});
 };
 for(const name of ["data.js","battle.js","game.js"]){
-  window.eval(fs.readFileSync(name,"utf8"));
+  let source=fs.readFileSync(name,"utf8");
+  if(name==="game.js"){
+    // Test-only injection; production game.js does not expose a state mutation API.
+    source=source.replace("window.SHANGZHOU_DEBUG={",`window.SHANGZHOU_DEBUG={
+      setArmyForTest:function(id,patch){Object.assign(getArmy(id),patch);render();},`);
+  }
+  window.eval(source);
 }
 const assert=(ok,msg)=>{if(!ok)throw new Error(msg);};
 const $=selector=>window.document.querySelector(selector);
@@ -29,7 +35,7 @@ $("#btn-march").click();
 assert(window.SHANGZHOU_DEBUG.getState().armies.find(a=>a.id==="a1").at==="jinnan","march to Jinnan failed");
 
 // If marching cannot be paid for, a war must NOT be declared as a side effect.
-window.eval('state.armies.find(a=>a.id==="a1").grain=0; render();');
+window.SHANGZHOU_DEBUG.setArmyForTest("a1",{grain:0});
 $('[data-settlement-id="crossing"]').click();
 $("#btn-march").click();
 let state=window.SHANGZHOU_DEBUG.getState();
@@ -44,7 +50,7 @@ assert(state.armies.find(a=>a.id==="a1").grain>0,"loading did not provision army
 assert(state.settlements.find(s=>s.id==="jinnan").grain<grainBefore,"loading conjured grain rather than using local stores");
 
 // Labor is drawn from population and the dedicated button reaches exactly the required amount.
-window.eval('state.armies.find(a=>a.id==="a1").laborers=0; state.armies.find(a=>a.id==="a1").laborMix={clan:0,slave:0}; render();');
+window.SHANGZHOU_DEBUG.setArmyForTest("a1",{laborers:0,laborMix:{clan:0,slave:0}});
 const popBefore=window.SHANGZHOU_DEBUG.getState().settlements.find(s=>s.id==="jinnan").pop;
 $("#btn-ready-labor").click();
 state=window.SHANGZHOU_DEBUG.getState();
