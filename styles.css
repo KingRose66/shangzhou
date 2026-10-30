@@ -314,3 +314,8 @@ dialog::backdrop{background:#0009}
   .map .node-label.geo-label{font-size:10px}
   .terrain-attribution{font-size:8px;max-width:80%}
 }
+
+/* Character placement: visible home city, road travel, army posting. */
+.char-location{margin:6px 0 4px;padding:5px 7px;border-left:2px solid #c2a875;background:rgba(201,176,122,.08);color:#ead5a9}
+.char-transfer{margin-top:5px;padding:5px 8px;font-size:11px;min-height:25px;background:#29271e;border-color:#665942;color:#e9dcbe}
+.char-transfer:hover{background:#42402d}
