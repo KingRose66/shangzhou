@@ -89,4 +89,15 @@ engine.orderAll("hold");
 assert(ours.orderMode==="hold"&&ours.targetEnemy===null,"hold order failed");
 engine.running=false;
 
-console.log("Gameplay regression passed: marching, physical logistics, recruitment and autonomous defense.");
+// v1.2 saves use the same campaign schema: updating must not erase a running game.
+$("#btn-save").click();
+const legacySave=JSON.parse(window.localStorage.getItem("shangzhou-save"));
+assert(legacySave,"save should be available after battle logic smoke test");
+legacySave.version="1.2.0";
+window.localStorage.setItem("shangzhou-save",JSON.stringify(legacySave));
+$("#btn-load").click();
+const restored=window.SHANGZHOU_DEBUG.getState();
+assert(restored.version===window.GAME_DATA.version,"old save did not migrate to current version");
+assert(restored.armies.find(a=>a.id==="a1").at==="jinnan","legacy save lost army location");
+
+console.log("Gameplay regression passed: marching, physical logistics, autonomous defense and save migration.");
