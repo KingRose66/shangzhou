@@ -1304,6 +1304,7 @@ function renderArmyDetail(){
     $("#btn-cancel-march").disabled=true;
     $("#btn-march").textContent="行军至选中聚落";
     $("#btn-assault").disabled=true;
+    $("#btn-skirmish").disabled=true;
     $("#btn-ready-labor").disabled=true;
     $("#btn-load-supply").disabled=true;
     return;
@@ -1353,6 +1354,7 @@ function renderArmyDetail(){
   $("#btn-cancel-march").disabled=!(a.route&&a.route.length);
   $("#btn-march").textContent=canMarch?"行军至 "+marchTarget.name:"行军至选中聚落";
   $("#btn-assault").disabled=!siege;
+  $("#btn-skirmish").disabled=false;
   const ownAt=getSet(a.at).owner===state.player;
   $("#btn-ready-labor").disabled=!ownAt||a.laborers>=requiredLaborers(a);
   $("#btn-load-supply").disabled=!ownAt;
@@ -1871,6 +1873,46 @@ function commandPendingEncounter(){
     commanders:{[p.playerArmy.id]:p.pc,[p.enemyArmy.id]:p.ec},
     onFinish:function(result){
       resolveTacticalResult(result,p.attacker,p.defender,p.playerArmy,p.enemyArmy,p.attackerFrom,p.after);
+    }
+  });
+}
+// Independent tactical sandbox: clone armies and never apply casualties to state.
+function practiceFieldBattle(){
+  if(turnBusy||state.gameOver||pendingEncounter||pendingWorldEvent||pendingBattleReport)
+    return notice("请先处理当前军国事件或遭遇战。");
+  if(BATTLE_ENGINE.running)return;
+  const original=getArmy(state.selectedArmy);
+  if(!original||original.owner!==state.player||armyMen(original)<=0)
+    return notice("请先在战略地图上选中一支我方军队。");
+  const field=$("#skirmish-terrain").value;
+  const allowed=["plain","rolling","highland","river"];
+  if(!allowed.includes(field))return notice("请选择野战地形。");
+  const playerArmy=deepCopy(original);
+  const opponent=state.armies.find(a=>a.owner!==state.player&&armyMen(a)>0);
+  const enemyArmy=opponent?deepCopy(opponent):{
+    id:"training-foe",owner:"neutral",name:"操练对手",
+    at:original.at,units:[{type:"clan_levy",men:260,morale:53},
+      {type:"bronze_spear",men:80,morale:62},{type:"archer",men:80,morale:58}],
+    grain:300,fodder:60,morale:64,supplyState:"畅通"
+  };
+  // The field battle still uses the complete realtime engine, only the
+  // campaign reconciliation is deliberately skipped.
+  BATTLE_ENGINE.start({
+    attacker:playerArmy,defender:enemyArmy,playerArmy,enemyArmy,
+    terrain:field,terrainName:terrainNames[field],locationName:"野战演练 · "+terrainNames[field],
+    siege:false,
+    commanders:{[playerArmy.id]:getChar(playerArmy.commander),
+      [enemyArmy.id]:getChar(enemyArmy.commander)},
+    onFinish:function(result){
+      const before=playerArmy.units.reduce((n,u)=>n+u.men,0);
+      const after=result.player.reduce((n,u)=>n+u.men,0);
+      const enemyBefore=enemyArmy.units.reduce((n,u)=>n+u.men,0);
+      const enemyAfter=result.enemy.reduce((n,u)=>n+u.men,0);
+      notice('<b>'+(result.winnerSide==="player"?"演练胜利":"演练结束，敌军保持阵线")+
+        '</b><p>我军：'+fmt(after)+' / '+fmt(before)+' 人，模拟损失 '+fmt(before-after)+
+        '；敌军：'+fmt(enemyAfter)+' / '+fmt(enemyBefore)+' 人，模拟损失 '+fmt(enemyBefore-enemyAfter)+
+        '。</p><p class="small good">这只是野战演练，未消耗实际粮草、兵力、时间，也不会改变外交和存档。</p>',
+        "野战演练军报");
     }
   });
 }
@@ -2941,6 +2983,7 @@ function showHelp(){
     '<b>人物与事件</b><br>人物会老去、死亡和继承；任命会影响其与君主的关系。重大事件提供有代价的选择，并标明历史置信度，不把后世传说强制写成唯一历史。<br><br>'+
     '<b>统治</b><br>新征服聚落不会立刻贡献全部产能；地方服从度会在驻军、邑宰、威望和时间作用下逐步恢复。<br><br>'+
     '<b>军队与补给</b><br>奴隶兵和族兵可快速征召；青铜正规军、弓手和战车需要实物装备与训练。军队可以分军、合军。出征前先在己方聚落点“补足随军民夫”“从驻地装载军粮草料”；民夫和粮草都从真实人口、仓库扣除。政权面板可查看季度粮食预测。<br><br>'+
+    '<b>野战</b><br>敌对军队沿战略道路进入同一城邑/交通节点时触发遭遇，可选择“亲自指挥”进入实时战场；旁边“野战演练”可在不影响正式存档的情况下体验多种地形。<br><br>'+
     '<b>战斗</b><br>实时战场中部队默认自主坚守、迎击近敌；可点“全军推进”“全军坚守”，或左键选具体单位后右键移动、指定攻击目标。侧后击、战车追击、士气、队形和地形决定胜负；大多数军队先溃败而非全员阵亡。<br><br>'+
     '<b>围城</b><br>设防聚落需要围困。等待可消耗城粮，也可强攻土垣和壕沟。<br><br>'+
     '<b>历史标签</b><br>A=直接证据；B=较强推定；C=合理玩法复原。贝作为通用货币等属于明确的可玩性简化。',
@@ -3067,6 +3110,7 @@ $("#btn-load-supply").onclick=loadArmySupplies;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
 $("#btn-disband-labor").onclick=function(){releaseLabor(50);};
 $("#btn-assault").onclick=assaultCurrentSiege;
+$("#btn-skirmish").onclick=practiceFieldBattle;
 $("#btn-split-army").onclick=splitArmy;
 $("#btn-merge-armies").onclick=mergeArmies;
 $("#recruit-help").innerHTML="奴隶征发兵、族兵即时集结；弓手、青铜正规军和战车需训练。人口、兵器、贝、粮食都真实扣除。";
