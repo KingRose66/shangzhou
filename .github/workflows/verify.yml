@@ -33,6 +33,10 @@ jobs:
         run: node scripts/visual-map.mjs
       - name: Mouse and two-finger touch gesture integration
         run: node scripts/gesture-map.mjs
+      - name: Install Microsoft Edge for compatibility testing
+        run: npx playwright install msedge
+      - name: Microsoft Edge touchpad, touch, and mouse integration
+        run: BROWSER_CHANNEL=msedge node scripts/gesture-map.mjs
       - name: Upload geographic map screenshot
         if: always()
         uses: actions/upload-artifact@v4
