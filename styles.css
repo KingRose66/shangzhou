@@ -325,3 +325,12 @@ dialog::backdrop{background:#0009}
 .geographic-tiles.relief-tiles{filter:brightness(.93) saturate(.88) contrast(1.08)}
 .geographic-wash{background:
   linear-gradient(180deg,rgba(10,14,13,.11),transparent 15%,transparent 85%,rgba(10,14,13,.16))}
+
+/* v1.7: Late Shang city administration and campaign orders */
+.city-policy{display:grid;gap:7px;margin-top:10px;padding:11px 12px;border:1px solid #6b5c3f66;border-radius:7px;background:#191a15a8}
+.city-policy select,#army-stance{width:100%;padding:7px 8px;min-height:34px;border:1px solid #827153;border-radius:5px;background:#24251f;color:#ead9b4}
+.city-policy .city-delegate-label{display:flex;align-items:flex-start;gap:7px;font-size:11px;color:#dbcba8;line-height:1.55;cursor:pointer}
+.city-delegate-label input{margin:3px 0 0}
+.army-route-preview{padding:7px 9px;background:#1e302b;border-left:3px solid #8ac1dd;color:#ceeaf1;border-radius:4px;line-height:1.65}
+.geographic-route.planned-route{stroke:#88d7ea;stroke-width:3.2;stroke-dasharray:7 5;filter:drop-shadow(0 0 3px #00161f)}
+.geographic-route.supply-route.planned-route{stroke:#a3ebf0;stroke-width:3.4;stroke-dasharray:7 4}
