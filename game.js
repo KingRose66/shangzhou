@@ -582,7 +582,7 @@ function renderCharacters(){
       pos?.kind==="detained"?"被拘留："+(getSet(pos.id)?.name||"未知"):
       "驻于："+(getSet(pos?.id)?.name||"未知");
     return '<div class="char-card">'+
-      '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+'</span>'+
+      '<b>'+c.name+'</b><span class="badge '+String(c.confidence||"c").toLowerCase()+'">'+c.role+(c.confidence==="C"?" · 虚构复原":"")+'</span>'+
       '<div class="small muted">统御 '+c.command+' · 勇武 '+c.martial+' · 治政 '+c.admin+' · 外交 '+c.diplomacy+' · 祭祀 '+c.ritual+' · 忠诚 '+loyalty+'</div>'+
       (status?'<div class="small warning">状态：'+(status==="detained"?"被拘留":status)+'</div>':'')+
       '<div class="small"><b>'+c.trait+'</b>：'+traitEffectText(c)+(army?' · <span class="good">统领 '+army.name+'</span>':gov?' · <span class="good">主政 '+gov.name+'</span>':'')+'</div>'+
