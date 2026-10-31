@@ -3018,7 +3018,7 @@ function loadGame(){
     const raw=localStorage.getItem("shangzhou-save");
     if(!raw)return notice("没有找到本机存档。");
     const loaded=JSON.parse(raw);
-    if(![DATA.version,"1.6.0","1.5.0","1.4.0","1.3.0","1.2.0"].includes(loaded.version)){
+    if(![DATA.version,"1.7.0","1.6.0","1.5.0","1.4.0","1.3.0","1.2.0"].includes(loaded.version)){
       return notice("该存档来自 "+(loaded.version||"旧版本")+"，当前版本为 "+DATA.version+"。地图或人物基础数据发生过较大变化，请开始新局。","存档版本不兼容");
     }
     loaded.version=DATA.version;
