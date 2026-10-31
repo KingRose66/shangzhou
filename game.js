@@ -899,6 +899,31 @@ function setupGeographicInteraction(map,m){
   },{passive:false,signal:controller.signal});
 }
 
+// Late-Shang-inspired settlement silhouettes, not literal reconstructions of
+// excavated city walls. The geographical coordinate remains at the icon center.
+function settlementGraphic(s){
+  const wall=s.wall>0,capital=!!s.capital,ferry=s.terrain==="river",hill=["hill","highland"].includes(s.terrain);
+  const roofs=capital
+    ? '<path d="M7 21 L26 10 L45 21 L42 24 L10 24 Z" class="shang-roof"/><path d="M15 18 L26 12 L37 18" class="shang-ridge"/>'
+    : ferry
+      ? '<path d="M11 23 L26 15 L41 23 L39 26 L13 26 Z" class="shang-roof"/><path d="M13 34 L39 34" class="shang-river"/>'
+      : hill
+        ? '<path d="M8 23 L18 16 L29 23 Z M25 23 L36 14 L46 23 Z" class="shang-roof"/>'
+        : '<path d="M7 23 L18 16 L29 23 Z M24 23 L35 15 L47 23 Z" class="shang-roof"/>';
+  const defenses=wall
+    ? '<path d="M7 28 H17 V38 H23 V32 H29 V38 H35 V28 H45 V44 H7 Z" class="shang-wall"/><path d="M21 44 V37 Q26 31 31 37 V44" class="shang-gate"/>'
+    : '<path d="M9 25 V40 H43 V25 M12 39 H40" class="shang-houses"/><path d="M17 39 V32 H23 V39 M32 39 V32 H38 V39" class="shang-posts"/>';
+  const palaces=capital?'<path d="M16 26 V35 H36 V26" class="shang-palace"/><path d="M25 26 V35" class="shang-ridge"/>':'';
+  const ferryDetail=ferry?'<path d="M4 43 Q17 38 29 43 Q42 47 50 42" class="shang-river"/>':'';
+  return '<svg class="settlement-art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" aria-hidden="true">'+
+    '<ellipse cx="26" cy="46" rx="20" ry="4" class="shang-shadow"/>'+
+    '<path d="M5 45 L10 41 H42 L47 45 L42 48 H10 Z" class="shang-terrace"/>'+
+    roofs+defenses+palaces+ferryDetail+'</svg>';
+}
+function settlementMarkerSize(s){
+  // Minimum 50px target: even minor sites can be clicked on touch screens.
+  return s.capital?60:52;
+}
 function renderMap(){
   const map=$("#map");
   map.innerHTML="";
@@ -922,36 +947,58 @@ function renderMap(){
   const supplyNodes=new Set();
   state.armies.filter(a=>a.owner===state.player).forEach(a=>(a.supplyPath||[]).forEach(id=>supplyNodes.add(id)));
   // Keep city names in one readable layer; no second row of faction/terrain metadata.
+  // The icon is a true 52–60px hit area; the place-name tag is independently
+  // clickable. Both select the identical settlement.
   const usedLabels=[];
   const cityByPriority=state.settlements.slice().sort((a,b)=>
-    Number(!!b.capital)-Number(!!a.capital)||Number(b.id===state.selectedSettlement)-Number(a.id===state.selectedSettlement));
+    Number(!!b.capital)-Number(!!a.capital)||
+    Number(b.id===state.selectedSettlement)-Number(a.id===state.selectedSettlement));
+  const allIconBoxes=state.settlements.map(s=>{
+    const p=geoScreenPosition(s.lon,s.lat,m),size=settlementMarkerSize(s);
+    return {id:s.id,x:p.x-size/2-4,y:p.y-size/2-4,w:size+8,h:size+8};
+  });
   cityByPriority.forEach(function(s){
     const p=geoScreenPosition(s.lon,s.lat,m);
-    if(p.x<-30||p.x>m.w+30||p.y<-30||p.y>m.h+30)return;
-    const node=mapEl("button","node geo-node "+s.owner+(s.capital?" capital":"")+
-      (state.selectedSettlement===s.id?" selected":"")+(supplyNodes.has(s.id)?" supply":""),p.x,p.y);
-    node.type="button";node.style.setProperty("--faction-color",faction(s.owner).color);
-    node.dataset.settlementId=s.id;node.setAttribute("aria-label",s.name);
-    node.title=s.name+" · "+ownerName(s.owner)+" · "+s.region+"（位置 "+s.geographyConfidence+"）";
-    node.textContent=s.capital?"◆":"";
+    const size=settlementMarkerSize(s);
+    if(p.x<-40||p.x>m.w+40||p.y<-40||p.y>m.h+40)return;
+    const node=mapEl("button","node geo-node city-sprite "+s.owner+
+      (s.capital?" capital":"")+(s.wall>0?" walled":"")+
+      (state.selectedSettlement===s.id?" selected":"")+
+      (supplyNodes.has(s.id)?" supply":""),p.x,p.y);
+    node.type="button";
+    node.style.setProperty("--faction-color",faction(s.owner).color);
+    node.style.setProperty("--marker-size",size+"px");
+    node.dataset.settlementId=s.id;
+    node.setAttribute("aria-label","查看"+s.name);
+    node.title=s.name+" · "+ownerName(s.owner)+" · "+s.region+"（考古/复原位置 "+s.geographyConfidence+"）";
+    node.innerHTML=settlementGraphic(s);
     node.onclick=function(e){e.stopPropagation();selectSettlement(s.id);};
     scene.appendChild(node);
-    const width=Math.min(170,15+s.name.length*12);
-    const positions=[
-      {x:p.x+12,y:p.y-20},
-      {x:p.x-width/2,y:p.y+13},
-      {x:p.x-width-12,y:p.y-21},
-      {x:p.x+12,y:p.y+17}
+    const width=Math.min(190,Math.max(54,Math.ceil(s.name.length*12.5)+24));
+    const height=30;
+    const choices=[
+      {x:p.x-width/2,y:p.y+size/2+1}, // below
+      {x:p.x-width/2,y:p.y-size/2-height-1}, // above
+      {x:p.x+size/2+3,y:p.y-height/2}, // right
+      {x:p.x-size/2-width-3,y:p.y-height/2} // left
     ];
-    const preference=positions.find(q=>{
-      const box={x:q.x-4,y:q.y-3,w:width+8,h:20};
+    const acceptable=choices.find(q=>{
+      const box={x:q.x-3,y:q.y-3,w:width+6,h:height+6};
       if(box.x<3||box.x+box.w>m.w-3||box.y<3||box.y+box.h>m.h-3)return false;
       if(usedLabels.some(t=>box.x<t.x+t.w&&box.x+box.w>t.x&&box.y<t.y+t.h&&box.y+box.h>t.y))return false;
+      if(allIconBoxes.some(t=>t.id!==s.id&&box.x<t.x+t.w&&box.x+box.w>t.x&&box.y<t.y+t.h&&box.y+box.h>t.y))return false;
       usedLabels.push(box);return true;
     });
-    if(preference){
-      const label=mapEl("div","node-label geo-label"+(s.capital?" capital-label":""),preference.x,preference.y,s.name);
-      label.title=s.name;
+    if(acceptable){
+      const label=mapEl("button","node-label geo-label geo-city-label"+
+        (s.capital?" capital-label":"")+
+        (state.selectedSettlement===s.id?" selected-label":""),acceptable.x,acceptable.y,s.name);
+      label.type="button";
+      label.style.width=width+"px";
+      label.style.setProperty("--faction-color",faction(s.owner).color);
+      label.dataset.settlementLabel=s.id;
+      label.title="点击查看"+s.name;
+      label.onclick=function(e){e.stopPropagation();selectSettlement(s.id);};
       scene.appendChild(label);
     }
   });
@@ -964,7 +1011,7 @@ function renderMap(){
   Object.keys(personBySettlement).forEach(function(id){
     const s=getSet(id);if(!s)return;
     const p=geoScreenPosition(s.lon,s.lat,m);
-    const badge=mapEl("button","map-person",p.x-20,p.y-16,"人"+personBySettlement[id]);
+    const badge=mapEl("button","map-person",p.x-31,p.y+26,"人"+personBySettlement[id]);
     badge.title=s.name+" 驻地人物 "+personBySettlement[id]+" 名";
     badge.onclick=function(e){e.stopPropagation();selectSettlement(id);};
     scene.appendChild(badge);
@@ -975,7 +1022,7 @@ function renderMap(){
     if(a.owner!==state.player&&intelLevel(s)<=0)return;
     const p=geoScreenPosition(s.lon,s.lat,m);
     const army=mapEl("button","army-token map-army "+(a.owner===state.player?"friendly":isHostile(state.player,a.owner)?"enemy":"foreign")+
-      (a.id===state.selectedArmy?" selected":""),p.x+18+(i%3)*10,p.y+18+(i%2)*11);
+      (a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
     const count=a.owner===state.player?fmt(armyMen(a)):intelLevel(s)>=3?fmt(armyMen(a)):intelLevel(s)===2?"约"+fmt(roughNumber(armyMen(a),100)):"？";
     army.type="button";army.textContent="⚑ "+count;
     army.title=a.name+" · "+s.name+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
