@@ -15,8 +15,10 @@ jobs:
           node-version: 22
       - name: Static game verification
         run: node scripts/verify.mjs
-      - name: Install smoke-test DOM
-        run: npm install --no-save jsdom@24
+      - name: Install DOM and browser test harness
+        run: npm install --no-save jsdom@24 playwright@1.56.1
+      - name: Install headless Chromium
+        run: npx playwright install --with-deps chromium
       - name: Browser DOM smoke test
         run: node scripts/browser-smoke.mjs
       - name: Multi-year campaign soak test
@@ -27,5 +29,14 @@ jobs:
         run: node scripts/character-events.mjs
       - name: Geographic map and character placement regression
         run: node scripts/geography-characters.mjs
+      - name: Real browser geographic map verification
+        run: node scripts/visual-map.mjs
+      - name: Upload geographic map screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-real-map
+          path: artifacts/real-map-verified.png
+          if-no-files-found: ignore
       - name: Gameplay logistics and autonomous battle regression
         run: node scripts/gameplay-regression.mjs
