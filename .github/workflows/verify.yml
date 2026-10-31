@@ -46,3 +46,5 @@ jobs:
           if-no-files-found: ignore
       - name: Gameplay logistics and autonomous battle regression
         run: node scripts/gameplay-regression.mjs
+      - name: City politics, roster and campaign orders regression
+        run: node scripts/city-march.mjs
