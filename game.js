@@ -2126,6 +2126,21 @@ function populationTick(){
   });
 }
 
+function aiAssignGovernors(){
+  state.settlements.forEach(function(s){
+    if(s.owner===state.player||s.owner==="neutral"||activeGovernor(s))return;
+    const chosen=state.characters.filter(function(char){
+      return char.alive&&char.faction===s.owner&&characterAvailable(char)&&!char.travel&&
+        characterAtSettlement(char,s.id)&&!charAssignedArmy(char.id)&&!charAssignedSettlement(char.id)&&
+        faction(s.owner).ruler!==char.name;
+    }).sort(function(a,b){return b.admin-a.admin;})[0];
+    if(chosen){
+      state.governors[s.id]=chosen.id;
+      chosen.location={kind:"settlement",id:s.id};
+      s.delegated=true;
+    }
+  });
+}
 function aiRecruit(owner){
   const f=faction(owner);
   const capital=state.settlements.find(function(s){return s.owner===owner&&s.capital;})||ownedSettlements(owner)[0];
@@ -2159,7 +2174,8 @@ function aiPrepareArmy(a){
   }
   if(!a.commander){
     const c=state.characters.find(function(ch){
-      return ch.faction===a.owner&&characterAvailable(ch)&&!charAssignedArmy(ch.id)&&!charAssignedSettlement(ch.id);
+      return ch.faction===a.owner&&characterAvailable(ch)&&!charAssignedArmy(ch.id)&&
+        !charAssignedSettlement(ch.id)&&!ch.travel&&characterAtSettlement(ch,a.at);
     });
     if(c){a.commander=c.id;c.location={kind:"army",id:a.id};}
   }
@@ -2371,6 +2387,7 @@ function endTurn(){
   if(turnBusy||state.gameOver||pendingWorldEvent||pendingBattleReport)return;
   turnBusy=true;
   processTraining();
+  aiAssignGovernors();
   processCityPolicies();
   settlementEconomy();
   processTribute();
