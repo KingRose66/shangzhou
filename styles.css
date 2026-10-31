@@ -319,3 +319,9 @@ dialog::backdrop{background:#0009}
 .char-location{margin:6px 0 4px;padding:5px 7px;border-left:2px solid #c2a875;background:rgba(201,176,122,.08);color:#ead5a9}
 .char-transfer{margin-top:5px;padding:5px 8px;font-size:11px;min-height:25px;background:#29271e;border-color:#665942;color:#e9dcbe}
 .char-transfer:hover{background:#42402d}
+
+/* Offline geography: preserve visible landform contrast on real source rasters. */
+.geographic-tiles.imagery-tiles{filter:brightness(1.04) saturate(.97) contrast(1.08)}
+.geographic-tiles.relief-tiles{filter:brightness(.93) saturate(.88) contrast(1.08)}
+.geographic-wash{background:
+  linear-gradient(180deg,rgba(10,14,13,.11),transparent 15%,transparent 85%,rgba(10,14,13,.16))}
