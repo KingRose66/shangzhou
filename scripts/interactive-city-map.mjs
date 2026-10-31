@@ -77,7 +77,7 @@ try{
  assert((await page.locator("#battle-status").innerText()).includes("野战演练"),
    "Battle engine didn't begin a realtime practice encounter");
  await page.locator("#battle-retreat").click();
- await page.locator("#battle-overlay:not(.show)").waitFor({timeout:5000});
+ await page.locator("#battle-overlay.show").waitFor({state:"hidden",timeout:5000});
  await page.locator("#dialog[open]").waitFor({timeout:4000});
  assert((await page.locator("#dialog-content").innerText()).includes("未消耗实际粮草"),
    "Practice result fails to disclose no impact on campaign");
