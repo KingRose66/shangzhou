@@ -56,7 +56,17 @@ try{
    const selected=await page.evaluate(()=>window.SHANGZHOU_DEBUG.getState().selectedSettlement);
    assert(selected===id,"City nameplate failed selection: "+id);
  }
- // Army and person buttons remain available without covering city icon centers.
+ // Map finder must work even for a city with a hidden or crowded label.
+ assert(await page.locator("#map-city-jump option").count()===21,"Quick city finder does not list all locations");
+ await page.locator("#map-city-jump").selectOption("shu");
+ assert((await page.evaluate(()=>window.SHANGZHOU_DEBUG.getState().selectedSettlement))==="shu",
+   "City finder failed to select distant Shu city");
+ const finderCenter=await page.locator('[data-settlement-id="shu"]').boundingBox();
+ const newBounds=await page.locator("#map").boundingBox();
+ assert(finderCenter&&finderCenter.x>newBounds.x&&finderCenter.x<newBounds.x+newBounds.width,
+   "City finder failed to bring destination into view");
+ await page.locator("#map-city-jump").selectOption("yin");
+  // Army and person buttons remain available without covering city icon centers.
  assert(await page.locator(".map-army").count()>0,"Army flags disappeared");
  assert(await page.locator(".map-person").count()>0,"Character marker disappeared");
  // Independent live battle rehearsal should not mutate the campaign in any way.
