@@ -334,3 +334,123 @@ dialog::backdrop{background:#0009}
 .army-route-preview{padding:7px 9px;background:#1e302b;border-left:3px solid #8ac1dd;color:#ceeaf1;border-radius:4px;line-height:1.65}
 .geographic-route.planned-route{stroke:#88d7ea;stroke-width:3.2;stroke-dasharray:7 5;filter:drop-shadow(0 0 3px #00161f)}
 .geographic-route.supply-route.planned-route{stroke:#a3ebf0;stroke-width:3.4;stroke-dasharray:7 4}
+
+/* v1.8: readable geographic settlements (visual reconstruction, not site plans).
+   Minimum 52px true hit-area; the whole separate nameplate is also a button. */
+.map .node.geo-node.city-sprite{
+  z-index:8;
+  width:var(--marker-size,52px);
+  height:var(--marker-size,52px);
+  min-width:52px;min-height:52px;
+  padding:3px;margin:0;
+  display:flex;align-items:center;justify-content:center;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(ellipse at 49% 42%,rgba(42,39,28,.89),rgba(13,20,17,.73) 73%,rgba(10,16,12,.25));
+  border:1px solid rgba(228,202,145,.44);
+  border-radius:12px;
+  box-shadow:0 3px 11px #020706bc, inset 0 0 0 1px rgba(246,216,166,.09);
+  color:#fff0cf;outline:none;
+  pointer-events:auto;cursor:pointer;
+  touch-action:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.map .node.geo-node.city-sprite.capital{
+  width:var(--marker-size,60px);
+  height:var(--marker-size,60px);
+  border-radius:12px;
+  border:2px solid rgba(255,219,145,.8);
+  background:radial-gradient(ellipse at 50% 35%,#69532f,#2f2d20 60%,#111d17 100%);
+  box-shadow:0 0 0 2px rgba(33,25,14,.75),0 4px 14px rgba(0,0,0,.85);
+  transform:translate(-50%,-50%);
+}
+.map .node.geo-node.city-sprite.selected,
+.map .node.geo-node.city-sprite:focus-visible{
+  outline:3px solid #f8d46f;outline-offset:3px;
+  box-shadow:0 0 0 5px #14221dd6,0 0 19px rgba(249,210,99,.82);
+}
+.map .node.geo-node.city-sprite.supply{
+  box-shadow:0 0 0 3px #194b32,0 0 12px rgba(139,215,141,.7);
+}
+.map .node.geo-node.city-sprite:hover{
+  background:radial-gradient(ellipse at 49% 35%,#6c6244,#202920 73%);
+  filter:brightness(1.17);
+}
+.settlement-art{
+  display:block;overflow:visible;
+  width:100%;height:100%;pointer-events:none;
+  filter:drop-shadow(0 2px 2px #050b0aae)
+}
+.settlement-art .shang-shadow{fill:#070b0aab}
+.settlement-art .shang-terrace{
+  fill:#b2a17b;stroke:#332a1e;stroke-width:1.6;stroke-linejoin:round;
+}
+.settlement-art .shang-roof{
+  fill:var(--faction-color,#ae7d51);stroke:#edcea0;stroke-width:1.8;stroke-linejoin:round
+}
+.settlement-art .shang-wall{
+  fill:#c0a77d;stroke:#3b3428;stroke-width:1.6;stroke-linejoin:round
+}
+.settlement-art .shang-gate{fill:#23251e;stroke:#f1dcb0;stroke-width:1.4}
+.settlement-art .shang-ridge,
+.settlement-art .shang-posts,
+.settlement-art .shang-palace,
+.settlement-art .shang-houses{
+  fill:none;stroke:#f7e2bc;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round
+}
+.settlement-art .shang-river{
+  fill:none;stroke:#8ed7d9;stroke-width:2;stroke-linecap:round
+}
+.map .node-label.geo-label.geo-city-label{
+  position:absolute;z-index:9;
+  display:flex;align-items:center;justify-content:center;
+  transform:none;
+  min-height:30px;padding:5px 9px;margin:0;
+  line-height:1.15;white-space:nowrap;
+  font-size:12px;font-weight:700;
+  color:#fff3d8;
+  border-radius:6px;
+  border:1px solid rgba(237,214,168,.49);
+  border-left:4px solid var(--faction-color,#a98b6d);
+  background:linear-gradient(115deg,rgba(19,26,23,.96),rgba(30,35,29,.90));
+  text-shadow:0 1px 3px #000;
+  box-shadow:0 3px 10px #0009;
+  pointer-events:auto;cursor:pointer;
+  touch-action:none;
+}
+.map .node-label.geo-label.geo-city-label:hover,
+.map .node-label.geo-label.geo-city-label:focus-visible{
+  background:#384132;
+  color:#fff9de;
+  border-color:#f0cf85;
+  outline:2px solid #f0cf85;outline-offset:1px
+}
+.map .node-label.geo-label.geo-city-label.capital-label{
+  background:linear-gradient(120deg,rgba(61,46,26,.98),rgba(27,33,26,.96));
+  border-color:#e3c388;
+  border-left-color:var(--faction-color);
+  font-size:13px;font-weight:800;
+}
+.map .node-label.geo-label.geo-city-label.selected-label{
+  box-shadow:0 0 0 2px #d5b85b,0 3px 9px #000a;
+}
+.map .army-token.map-army{
+  min-width:49px;min-height:32px;
+  border-width:2px;border-radius:7px;
+  padding:6px 9px;
+  font-size:12px;
+  background:#121d1adf;
+  box-shadow:0 2px 9px #000d;
+}
+.map .army-token.map-army.selected{
+  border-color:#fae0a1;
+  outline:2px solid #f1cb67;outline-offset:2px;
+}
+.map .map-person{min-width:31px;min-height:25px;font-weight:700;padding:3px 6px}
+#btn-skirmish{background:linear-gradient(120deg,#655037,#3d3225);color:#f5e1b5;border:1px solid #bf9c63}
+#skirmish-terrain{min-height:34px;background:#232820;border:1px solid #8b7b5b;border-radius:5px;color:#f5ebd5}
+.skirmish-tools{display:grid;grid-template-columns:1fr;gap:7px;margin:10px 0;padding:10px;border:1px solid #73624355;border-radius:7px;background:#211e17a8}
+.skirmish-tools .small{font-size:11px;color:#bcb29d}
+@media(max-width:800px){
+  .map .node-label.geo-label.geo-city-label{font-size:11px}
+  .map .node.geo-node.city-sprite{min-width:52px;min-height:52px}
+}
