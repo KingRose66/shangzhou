@@ -689,42 +689,143 @@ function createMapControls(map){
   });
   map.appendChild(controls);
 }
+// A single transform model is shared by mouse dragging and two-finger touch gestures.
+// Preview happens on the existing geographic scene; the map is redrawn only at gesture end.
+function geographicGestureCommit(m,scale,translateX,translateY){
+  const effectiveZoom=Math.max(4.1,Math.min(9.2,m.zoom+Math.log2(Math.max(.001,scale))));
+  const actualScale=Math.pow(2,effectiveZoom-m.zoom);
+  const centerX=(m.center.x-m.w/2)*actualScale+m.w/2-translateX;
+  const centerY=(m.center.y-m.h/2)*actualScale+m.h/2-translateY;
+  const center=geoLonLat(centerX,centerY,effectiveZoom);
+  geoMapView.lon=Math.max(98.5,Math.min(123,center.lon));
+  geoMapView.lat=Math.max(24.5,Math.min(44,center.lat));
+  const targetDelta=geoMapView.zoomDelta+(effectiveZoom-m.zoom);
+  geoMapView.zoomDelta=Math.max(-1.6,Math.min(2.6,targetDelta));
+}
 function setupGeographicInteraction(map,m){
-  let dragging=null;
-  const endDrag=function(e,cancelled){
-    if(!dragging||dragging.id!==e.pointerId)return;
-    const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;
-    if(!cancelled&&(Math.abs(dx)+Math.abs(dy)>2)){
-      const old=geoWorld(dragging.lon,dragging.lat,m.zoom);
-      const next=geoLonLat(old.x-dx,old.y-dy,m.zoom);
-      geoMapView.lon=Math.max(100.8,Math.min(120,next.lon));
-      geoMapView.lat=Math.max(26.9,Math.min(40.8,next.lat));
+  // Prevent previous render's listeners from stacking up on the permanent #map element.
+  if(map._geoAbort)map._geoAbort.abort();
+  const controller=new AbortController();
+  map._geoAbort=controller;
+  const opts={signal:controller.signal};
+  const scene=map.querySelector(".geo-map-scene");
+  let mouse=null;
+  let touchGesture=null;
+  let ignoreClicksUntil=0;
+  const tolerance=5;
+  const clamp=(value,low,high)=>Math.max(low,Math.min(high,value));
+  const pointerCoordinates=(x,y)=>{
+    const r=map.getBoundingClientRect();
+    return {x:x-r.left,y:y-r.top};
+  };
+  const applyPreview=(scale,x,y)=>{
+    if(scene){
+      scene.style.transformOrigin="0 0";
+      scene.style.transform="translate("+x+"px,"+y+"px) scale("+scale+")";
     }
-    dragging=null;
+  };
+  const finishMouse=(e,cancelled)=>{
+    if(!mouse||e.pointerId!==mouse.id)return;
+    const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;
+    const moved=mouse.moved;
+    mouse=null;
     map.classList.remove("panning");
+    if(moved&&!cancelled){
+      geographicGestureCommit(m,1,dx,dy);
+      ignoreClicksUntil=performance.now()+500;
+      renderMap();
+    }else if(scene){
+      scene.style.transform="";
+    }
     try{map.releasePointerCapture(e.pointerId);}catch(_){}
-    renderMap();
   };
-  map.onpointerdown=function(e){
-    if(e.button!==0)return;
-    if(e.target.closest(".geo-node, .map-army, .map-person, .geo-map-controls"))return;
+
+  // Mouse: drag can start on terrain or a city icon, but a stationary click still
+  // selects the city. Capture only after movement exceeds a short threshold.
+  map.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="touch"||e.button!==0||e.target.closest(".geo-map-controls"))return;
+    mouse={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+  },opts);
+  map.addEventListener("pointermove",e=>{
+    if(!mouse||e.pointerId!==mouse.id)return;
+    const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;
+    if(!mouse.moved&&Math.hypot(dx,dy)<tolerance)return;
+    if(!mouse.moved){
+      mouse.moved=true;
+      map.classList.add("panning");
+      try{map.setPointerCapture(e.pointerId);}catch(_){}
+    }
+    applyPreview(1,dx,dy);
+  },opts);
+  map.addEventListener("pointerup",e=>finishMouse(e,false),opts);
+  map.addEventListener("pointercancel",e=>finishMouse(e,true),opts);
+  map.addEventListener("lostpointercapture",e=>{
+    if(mouse&&mouse.id===e.pointerId)finishMouse(e,false);
+  },opts);
+  map.addEventListener("click",e=>{
+    if(performance.now()<ignoreClicksUntil){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  },{capture:true,signal:controller.signal});
+
+  // Touch: two fingers operate as a single rigid gesture. Their midpoint pans;
+  // their spacing zooms. We suppress the browser's native page pinch inside the
+  // map, but taps on markers and map controls remain normal.
+  const touchesInfo=e=>{
+    const r=map.getBoundingClientRect();
+    const t1=e.touches[0],t2=e.touches[1];
+    const x1=t1.clientX-r.left,y1=t1.clientY-r.top;
+    const x2=t2.clientX-r.left,y2=t2.clientY-r.top;
+    return {x:(x1+x2)/2,y:(y1+y2)/2,
+      distance:Math.max(10,Math.hypot(x2-x1,y2-y1))};
+  };
+  const touchStart=e=>{
+    if(e.touches.length<2||e.target.closest(".geo-map-controls"))return;
+    if(!touchGesture){
+      const info=touchesInfo(e);
+      touchGesture={origin:info,scale:1,tx:0,ty:0,moved:false};
+      map.classList.add("panning");
+    }
+    if(e.cancelable)e.preventDefault();
+  };
+  const touchMove=e=>{
+    if(!touchGesture||e.touches.length<2)return;
+    if(e.cancelable)e.preventDefault();
+    const p=touchesInfo(e);
+    const wantedZoom=m.zoom+Math.log2(p.distance/touchGesture.origin.distance);
+    // Limit effective zoom to the same constraints as buttons/wheel.
+    const fitZoom=m.zoom-geoMapView.zoomDelta;
+    const zoom=clamp(wantedZoom,Math.max(4.1,fitZoom-1.6),Math.min(9.2,fitZoom+2.6));
+    const scale=Math.pow(2,zoom-m.zoom);
+    const tx=p.x-touchGesture.origin.x*scale;
+    const ty=p.y-touchGesture.origin.y*scale;
+    touchGesture.scale=scale;touchGesture.tx=tx;touchGesture.ty=ty;
+    touchGesture.moved=Math.abs(tx)+Math.abs(ty)>2||Math.abs(scale-1)>.008;
+    applyPreview(scale,tx,ty);
+  };
+  const touchEnd=e=>{
+    if(!touchGesture||e.touches.length>=2)return;
+    if(e.cancelable)e.preventDefault();
+    const done=touchGesture;
+    touchGesture=null;
+    map.classList.remove("panning");
+    if(done.moved){
+      geographicGestureCommit(m,done.scale,done.tx,done.ty);
+      ignoreClicksUntil=performance.now()+500;
+      renderMap();
+    }else if(scene)scene.style.transform="";
+  };
+  map.addEventListener("touchstart",touchStart,{passive:false,signal:controller.signal});
+  map.addEventListener("touchmove",touchMove,{passive:false,signal:controller.signal});
+  map.addEventListener("touchend",touchEnd,{passive:false,signal:controller.signal});
+  map.addEventListener("touchcancel",touchEnd,{passive:false,signal:controller.signal});
+  map.addEventListener("wheel",e=>{
+    if(e.target.closest(".geo-map-controls"))return;
     e.preventDefault();
-    dragging={id:e.pointerId,x:e.clientX,y:e.clientY,lon:geoMapView.lon,lat:geoMapView.lat};
-    try{map.setPointerCapture(e.pointerId);}catch(_){}
-    map.classList.add("panning");
-  };
-  map.onpointermove=function(e){
-    if(!dragging||e.pointerId!==dragging.id)return;
-    const scene=map.querySelector(".geo-map-scene");
-    if(scene)scene.style.transform="translate("+(e.clientX-dragging.x)+"px,"+(e.clientY-dragging.y)+"px)";
-  };
-  map.onpointerup=function(e){endDrag(e,false);};
-  map.onpointercancel=function(e){endDrag(e,true);};
-  map.onwheel=function(e){
-    e.preventDefault();
-    geoMapView.zoomDelta=Math.max(-1.6,Math.min(2.6,geoMapView.zoomDelta+(e.deltaY<0?.35:-.35)));
+    geoMapView.zoomDelta=clamp(geoMapView.zoomDelta+(e.deltaY<0?.35:-.35),-1.6,2.6);
     renderMap();
-  };
+  },{passive:false,signal:controller.signal});
 }
 
 function renderMap(){
