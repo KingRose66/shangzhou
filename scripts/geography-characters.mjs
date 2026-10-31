@@ -44,7 +44,7 @@ assert(w.document.querySelectorAll(".geo-node").length===w.GAME_DATA.settlements
 assert(w.document.querySelectorAll(".geographic-tile").length===1,"packaged terrain raster missing");
 assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"local NASA image not mounted");
 const controls=w.document.querySelectorAll(".geo-map-controls button");
-assert(controls.length===4,"zoom/fullscreen/terrain controls missing");
+assert(controls.length===5,"zoom/full-view/terrain/input-mode controls missing");
 controls[3].click();
 assert($(".geographic-tile").src.includes("assets/china-relief.webp"),"local relief toggle failed");
 w.document.querySelectorAll(".geo-map-controls button")[3].click();
