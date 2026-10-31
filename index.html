@@ -11,7 +11,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <div class="eyebrow">晚商大战略 · v1.7</div>
+        <div class="eyebrow">晚商大战略 · v1.8</div>
         <h1>大邑商：四土</h1>
       </div>
       <div class="top-actions">
@@ -128,6 +128,17 @@
             <button id="btn-labor">征调民夫 50</button>
             <button id="btn-disband-labor">遣返民夫 50</button>
             <button id="btn-assault">强攻围困城邑</button>
+            <div class="skirmish-tools">
+              <b>野战操练 · 不影响正式战局</b>
+              <select id="skirmish-terrain" aria-label="选择野战演练地形">
+                <option value="plain">开阔平原</option>
+                <option value="rolling">起伏丘陵</option>
+                <option value="highland">山地林谷</option>
+                <option value="river">河谷渡口</option>
+              </select>
+              <button id="btn-skirmish" type="button">亲自指挥野战演练</button>
+              <span class="small">用当前选中的军队编制演练；战斗胜败及伤亡不写入存档。</span>
+            </div>
             <button id="btn-split-army">分出一军</button>
             <button id="btn-merge-armies">合并同地军队</button>
           </div>
