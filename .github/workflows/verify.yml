@@ -31,6 +31,15 @@ jobs:
         run: node scripts/geography-characters.mjs
       - name: Real browser geographic map verification
         run: node scripts/visual-map.mjs
+      - name: City sprite selection and field-battle practice
+        run: node scripts/interactive-city-map.mjs
+      - name: Upload illustrated city map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: illustrated-cities
+          path: artifacts/illustrated-city-map.png
+          if-no-files-found: ignore
       - name: Mouse and two-finger touch gesture integration
         run: node scripts/gesture-map.mjs
       - name: Install Microsoft Edge for compatibility testing
