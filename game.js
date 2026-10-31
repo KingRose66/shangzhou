@@ -398,7 +398,8 @@ function armyPower(a,at,attacking){
   const s=at||getSet(a.at),commander=getChar(a.commander);
   let p=a.units.reduce(function(n,u){return n+unitPower(u,commander);},0);
   const supply=a.supplyState==="畅通"?1:a.supplyState==="危险"?.88:.68;
-  return p*(a.morale/65)*commanderBonus(a)*supply*terrainBattleFactor(a,s,!!attacking);
+  const stance=a.stance==="forced"?.92:a.stance==="cautious"&&!attacking?1.08:1;
+  return p*(a.morale/65)*commanderBonus(a)*supply*terrainBattleFactor(a,s,!!attacking)*stance;
 }
 function requiredLaborers(a){
   const hundreds=Math.ceil(armyMen(a)/100);
@@ -676,7 +677,7 @@ function realTerrainTiles(parent,m){
 function nodeBlocked(id,owner){
   return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
 }
-function geographicRoutes(map,m,selectedEdges){
+function geographicRoutes(map,m,selectedEdges,plannedEdges){
   const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
   svg.setAttribute("class","geographic-routes");
   svg.setAttribute("viewBox","0 0 "+m.w+" "+m.h);
@@ -694,7 +695,7 @@ function geographicRoutes(map,m,selectedEdges){
       const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
       const mx=(a.x+b.x)/2-dy/dist*curve,my=(a.y+b.y)/2+dx/dist*curve;
       p.setAttribute("d","M "+a.x+" "+a.y+" Q "+mx+" "+my+" "+b.x+" "+b.y);
-      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":""));
+      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":"")+(plannedEdges.has(k)?" planned-route":""));
       svg.appendChild(p);
     });
   });
@@ -907,13 +908,15 @@ function renderMap(){
   scene.className="geo-map-scene";
   map.appendChild(scene);
   realTerrainTiles(scene,m);
-  const selectedEdges=new Set();
+  const selectedEdges=new Set(),plannedEdges=new Set();
   const supplyArmy=getArmy(state.selectedArmy);
   if(supplyArmy&&supplyArmy.owner===state.player){
     const path=supplyArmy.supplyPath||[];
     for(let i=1;i<path.length;i++)selectedEdges.add([path[i-1],path[i]].sort().join("-"));
+    const planned=[supplyArmy.at].concat(supplyArmy.route||[]);
+    for(let i=1;i<planned.length;i++)plannedEdges.add([planned[i-1],planned[i]].sort().join("-"));
   }
-  geographicRoutes(scene,m,selectedEdges);
+  geographicRoutes(scene,m,selectedEdges,plannedEdges);
   addGeographyLabels(scene,m);
 
   const supplyNodes=new Set();
@@ -1002,6 +1005,79 @@ function selectSettlement(id){
   state.selectedSettlement=id;
   render();
 }
+const MARCH_STANCES={
+  cautious:{name:"谨慎推进",description:"行军粮耗少8%，防御组织提高；每季沿路线最多一段。"},
+  normal:{name:"常规行军",description:"消耗与组织正常；每季沿路线前进一段。"},
+  forced:{name:"急行推进",description:"行军耗粮增25%，每季最多前进两段；士气下降，交战效率受损。"}
+};
+function armyStance(a){return MARCH_STANCES[a.stance]||MARCH_STANCES.normal;}
+function setArmyStance(id,value){
+  const a=getArmy(id);
+  if(!a||a.owner!==state.player||!MARCH_STANCES[value])return;
+  if(a.stance===value)return;
+  a.stance=value;
+  addLog(a.name+"调整为「"+armyStance(a).name+"」。");
+  render();
+}
+function accessibleMarchPath(a,targetId){
+  const start=a.at,q=[[start]],seen=new Set([start]);
+  while(q.length){
+    const path=q.shift(),at=path[path.length-1];
+    if(at===targetId)return path;
+    const s=getSet(at);
+    for(const id of s.roads){
+      if(seen.has(id)||nodeBlocked(id,a.owner))continue;
+      const next=getSet(id);
+      if(!next||!(next.owner===a.owner||hasMilitaryAccess(a.owner,next.owner)))continue;
+      seen.add(id);q.push(path.concat(id));
+    }
+  }
+  return null;
+}
+function planSelectedArmyRoute(){
+  const a=getArmy(state.selectedArmy),target=getSet(state.selectedSettlement);
+  if(!a||a.owner!==state.player||!target)return notice("请先选中我军与目的地。");
+  if(a.at===target.id)return notice("军队已经到达该聚落。");
+  const route=accessibleMarchPath(a,target.id);
+  if(!route)return notice("不存在连续的己方或获准通行道路；请先攻取敌方阻隔节点或争取通行。");
+  a.route=route.slice(1);
+  const stepsPerSeason=a.stance==="forced"?2:1;
+  addLog(a.name+"规划路线："+route.map(id=>getSet(id).name).join(" → ")+"（预计约"+Math.ceil(a.route.length/stepsPerSeason)+"季，不含补给中断）。","good");
+  render();
+}
+function cancelSelectedArmyRoute(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player)return;
+  a.route=[];
+  addLog(a.name+"取消后续行军，原地待命。");
+  render();
+}
+function advancePlannedArmies(){
+  state.armies.filter(a=>a.owner===state.player&&a.route&&a.route.length&&armyMen(a)>0).forEach(function(a){
+    const legs=a.stance==="forced"?2:1;
+    for(let step=0;step<legs&&a.route.length;step++){
+      const next=getSet(a.route[0]),current=getSet(a.at);
+      if(!next||!current.roads.includes(next.id)||nodeBlocked(next.id,a.owner)||
+        !(next.owner===a.owner||hasMilitaryAccess(a.owner,next.owner))){
+        a.route=[];
+        addLog(a.name+"路线被敌军或外交变化阻断，停止行军。","warning");
+        break;
+      }
+      if(a.laborers<requiredLaborers(a)){
+        addLog(a.name+"民夫不足，连续行军暂停；可在我方城市补足。","warning");break;
+      }
+      const cost=marchCost(a,next);
+      if(a.grain<cost.grain||a.fodder<cost.fodder){
+        addLog(a.name+"粮草不足，停于"+current.name+"。请从驻地粮仓补给。","warning");break;
+      }
+      a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);
+      a.previous=a.at;a.at=next.id;a.route.shift();
+      if(a.stance==="forced")a.morale=Math.max(24,a.morale-2);
+      addLog(a.name+"按预定路线抵达"+next.name+(a.route.length?"，后续目标 "+getSet(a.route[0]).name:"，计划行军完成")+".");
+      refreshAllSupply();
+    }
+  });
+}
 function marchSelectedArmy(){
   const a=getArmy(state.selectedArmy);
   const target=getSet(state.selectedSettlement);
@@ -1009,6 +1085,7 @@ function marchSelectedArmy(){
   if(!target||target.id===a.at)return notice("请先选择一个相邻目的地。");
   const at=getSet(a.at);
   if(!at.roads.includes(target.id))return notice("该聚落不与军队当前位置直接相邻。需要逐节点行军。");
+  a.route=[];
   moveArmy(a,target.id);
 }
 function selectArmy(id){
@@ -1165,6 +1242,7 @@ function renderArmies(){
       '<b>'+a.name+'</b><span class="badge">'+getSet(a.at).name+'</span>'+
       '<div>兵力 '+fmt(armyMen(a))+' · 将领 '+(c?c.name:"未任命")+' · 士气 '+Math.round(a.morale)+'</div>'+
       '<div class="small '+(a.supplyState==="畅通"?"good":a.supplyState==="危险"?"warning":"bad")+'">粮道 '+a.supplyState+' · 民夫 '+a.laborers+'/'+need+' · 随军粮 '+Math.round(a.grain)+' 石</div>'+
+      '<div class="small muted">军令：'+armyStance(a).name+(a.route&&a.route.length?' · 目的地 '+getSet(a.route[a.route.length-1]).name:'')+'</div>'+
       '<button onclick="selectArmy(\''+a.id+'\')">选中</button>'+
     '</div>';
   }).join("")||'<span class="muted">当前没有可用军队。</span>';
@@ -1175,6 +1253,8 @@ function renderArmyDetail(){
   if(!a||a.owner!==state.player){
     $("#army-detail").innerHTML='<span class="muted">请选择一支我方军队。</span>';
     $("#btn-march").disabled=true;
+    $("#btn-plan-march").disabled=true;
+    $("#btn-cancel-march").disabled=true;
     $("#btn-march").textContent="行军至选中聚落";
     $("#btn-assault").disabled=true;
     $("#btn-ready-labor").disabled=true;
@@ -1205,15 +1285,25 @@ function renderArmyDetail(){
       '<span>军粮</span><b>'+Math.round(a.grain)+' 石</b>'+
       '<span>草料</span><b>'+Math.round(a.fodder)+'</b>'+
     '</div>'+
+    '<div class="army-orders"><label>行军方式</label><select id="army-stance">'+
+      Object.keys(MARCH_STANCES).map(function(key){
+        return '<option value="'+key+'" '+((a.stance||"normal")===key?"selected":"")+'>'+MARCH_STANCES[key].name+'</option>';
+      }).join("")+'</select></div>'+
+    '<p class="small muted">'+armyStance(a).description+'</p>'+
+    (a.route&&a.route.length?'<div class="small army-route-preview">预定路线：'+[a.at].concat(a.route).map(id=>getSet(id).name).join(" → ")+'</div>':'')+
     '<div class="army-orders"><label>统军将领</label><select id="commander-select">'+options+'</select></div>'+
     '<div class="unit-list">'+rows+'</div>'+
     '<p class="small">仅按随军粮估算可维持约 <b>'+endurance.toFixed(1)+' 季</b>（粮道补给未计入）。</p>'+
     '<p class="small muted">粮道：'+(path||"无可用路径")+(supplySource?' · 后方来源 '+supplySource.name:'')+'</p>'+
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
+  $("#army-stance").onchange=function(){setArmyStance(a.id,this.value);};
   const marchTarget=getSet(state.selectedSettlement);
   const canMarch=!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
   $("#btn-march").disabled=!canMarch;
+  $("#btn-plan-march").disabled=!(marchTarget&&marchTarget.id!==a.at&&
+    accessibleMarchPath(a,marchTarget.id));
+  $("#btn-cancel-march").disabled=!(a.route&&a.route.length);
   $("#btn-march").textContent=canMarch?"行军至 "+marchTarget.name:"行军至选中聚落";
   $("#btn-assault").disabled=!siege;
   const ownAt=getSet(a.at).owner===state.player;
@@ -1490,7 +1580,8 @@ function marchCost(a,dest){
   const tech=hasTech(a.owner,"long_supply")?.88:1;
   const commander=getChar(a.commander);
   const commandMarch=commander&&commander.trait==="西土开拓"?.90:commander&&commander.trait==="舟陆并用"&&dest.terrain==="river"?.92:1;
-  const grain=Math.max(18,men*.04*rough*seasonal*tech*commandMarch);
+  const stance=a.stance==="forced"?1.25:a.stance==="cautious"?.92:1;
+  const grain=Math.max(18,men*.04*rough*seasonal*tech*commandMarch*stance);
   const fodder=chariotCount(a)*8*(hasTech(a.owner,"wheel_maintenance")?.85:hasTech(a.owner,"chariot_craft")?.9:1);
   return {grain:grain,fodder:fodder};
 }
@@ -2294,6 +2385,7 @@ function endTurn(){
 
   runAiActions(actions,0,function(){
     if(state.gameOver){turnBusy=false;render();return;}
+    advancePlannedArmies();
     state.tick=(state.tick||0)+1;
     state.season++;
     if(state.season>3){state.season=0;state.year++;state.turn++;}
@@ -2898,6 +2990,8 @@ $("#encounter-command").onclick=commandPendingEncounter;
 $("#encounter-auto").onclick=autoPendingEncounter;
 $("#encounter-retreat").onclick=retreatPendingEncounter;
 $("#btn-march").onclick=marchSelectedArmy;
+$("#btn-plan-march").onclick=planSelectedArmyRoute;
+$("#btn-cancel-march").onclick=cancelSelectedArmyRoute;
 $("#btn-ready-labor").onclick=readyLabor;
 $("#btn-load-supply").onclick=loadArmySupplies;
 $("#btn-labor").onclick=function(){mobilizeLabor(50);};
