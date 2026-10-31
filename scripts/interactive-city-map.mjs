@@ -69,7 +69,10 @@ try{
   // Army and person buttons remain available without covering city icon centers.
  assert(await page.locator(".map-army").count()>0,"Army flags disappeared");
  assert(await page.locator(".map-person").count()>0,"Character marker disappeared");
- // Independent live battle rehearsal should not mutate the campaign in any way.
+ // Capture the real playable terrain and city graphics BEFORE the battle dialog.
+ fs.mkdirSync("artifacts",{recursive:true});
+ await page.locator("#map").screenshot({path:"artifacts/illustrated-city-map.png"});
+  // Independent live battle rehearsal should not mutate the campaign in any way.
  const snapshot=await page.evaluate(()=>JSON.stringify(window.SHANGZHOU_DEBUG.getState()));
  await page.locator("#skirmish-terrain").selectOption("highland");
  await page.locator("#btn-skirmish").click();
@@ -84,8 +87,6 @@ try{
  const after=await page.evaluate(()=>JSON.stringify(window.SHANGZHOU_DEBUG.getState()));
  assert(snapshot===after,"Practice unexpectedly altered the real campaign");
  assert(!errors.length,"Runtime errors: "+errors.join(" | "));
- fs.mkdirSync("artifacts",{recursive:true});
- await page.locator("#map").screenshot({path:"artifacts/illustrated-city-map.png"});
  console.log("City sprites click test passed: 21 sites with >=52px hit targets, clickable names, and autonomous field practice.");
 }finally{
  if(browser)await browser.close();
