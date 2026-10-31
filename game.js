@@ -949,18 +949,57 @@ function renderMap(){
   // Keep city names in one readable layer; no second row of faction/terrain metadata.
   // The icon is a true 52–60px hit area; the place-name tag is independently
   // clickable. Both select the identical settlement.
+  // Screen-space collision avoidance: the true location remains at the
+  // geographical coordinate. When sites are close, shift only the artwork
+  // and draw a leader to the real anchor.
   const usedLabels=[];
   const cityByPriority=state.settlements.slice().sort((a,b)=>
     Number(!!b.capital)-Number(!!a.capital)||
     Number(b.id===state.selectedSettlement)-Number(a.id===state.selectedSettlement));
-  const allIconBoxes=state.settlements.map(s=>{
-    const p=geoScreenPosition(s.lon,s.lat,m),size=settlementMarkerSize(s);
-    return {id:s.id,x:p.x-size/2-4,y:p.y-size/2-4,w:size+8,h:size+8};
-  });
+  const markerPositions=new Map(),occupiedMarkers=[];
+  const fits=(rect,margin=4)=>
+    rect.x>=margin&&rect.y>=margin&&rect.x+rect.w<=m.w-margin&&rect.y+rect.h<=m.h-margin;
+  const overlaps=(a,b,pad=0)=>
+    a.x<b.x+b.w+pad&&a.x+a.w+pad>b.x&&a.y<b.y+b.h+pad&&a.y+a.h+pad>b.y;
   cityByPriority.forEach(function(s){
-    const p=geoScreenPosition(s.lon,s.lat,m);
+    const actual=geoScreenPosition(s.lon,s.lat,m),size=settlementMarkerSize(s);
+    const candidates=[{x:0,y:0}];
+    // Compact radial candidates ensure the least visual drift necessary.
+    [55,83,115,147].forEach(r=>{
+      for(let i=0;i<12;i++){
+        const t=(i/12)*Math.PI*2;
+        candidates.push({x:Math.round(r*Math.cos(t)),y:Math.round(r*Math.sin(t))});
+      }
+    });
+    const chosen=candidates.find(d=>{
+      const box={x:actual.x+d.x-size/2-3,y:actual.y+d.y-size/2-3,w:size+6,h:size+6};
+      return fits(box,5)&&!occupiedMarkers.some(rect=>overlaps(box,rect,5));
+    })||{x:0,y:0};
+    const center={x:actual.x+chosen.x,y:actual.y+chosen.y};
+    markerPositions.set(s.id,center);
+    occupiedMarkers.push({id:s.id,x:center.x-size/2-3,y:center.y-size/2-3,w:size+6,h:size+6});
+  });
+  const leaders=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  leaders.setAttribute("class","city-leaders");
+  leaders.setAttribute("viewBox","0 0 "+m.w+" "+m.h);
+  leaders.setAttribute("aria-hidden","true");
+  cityByPriority.forEach(function(s){
+    const p=geoScreenPosition(s.lon,s.lat,m),where=markerPositions.get(s.id);
+    if(!where||Math.hypot(where.x-p.x,where.y-p.y)<8)return;
+    const line=document.createElementNS("http://www.w3.org/2000/svg","path");
+    line.setAttribute("d","M "+p.x+" "+p.y+" L "+where.x+" "+where.y);
+    line.setAttribute("class","city-leader");
+    leaders.appendChild(line);
+    const ring=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    ring.setAttribute("cx",p.x);ring.setAttribute("cy",p.y);
+    ring.setAttribute("r","3.8");ring.setAttribute("class","city-true-anchor");
+    leaders.appendChild(ring);
+  });
+  scene.appendChild(leaders);
+  cityByPriority.forEach(function(s){
+    const p=markerPositions.get(s.id);
     const size=settlementMarkerSize(s);
-    if(p.x<-40||p.x>m.w+40||p.y<-40||p.y>m.h+40)return;
+    if(!p||p.x<-40||p.x>m.w+40||p.y<-40||p.y>m.h+40)return;
     const node=mapEl("button","node geo-node city-sprite "+s.owner+
       (s.capital?" capital":"")+(s.wall>0?" walled":"")+
       (state.selectedSettlement===s.id?" selected":"")+
@@ -977,16 +1016,16 @@ function renderMap(){
     const width=Math.min(190,Math.max(54,Math.ceil(s.name.length*12.5)+24));
     const height=30;
     const choices=[
-      {x:p.x-width/2,y:p.y+size/2+1}, // below
-      {x:p.x-width/2,y:p.y-size/2-height-1}, // above
-      {x:p.x+size/2+3,y:p.y-height/2}, // right
-      {x:p.x-size/2-width-3,y:p.y-height/2} // left
+      {x:p.x-width/2,y:p.y+size/2+2},
+      {x:p.x-width/2,y:p.y-size/2-height-2},
+      {x:p.x+size/2+4,y:p.y-height/2},
+      {x:p.x-size/2-width-4,y:p.y-height/2}
     ];
     const acceptable=choices.find(q=>{
       const box={x:q.x-3,y:q.y-3,w:width+6,h:height+6};
-      if(box.x<3||box.x+box.w>m.w-3||box.y<3||box.y+box.h>m.h-3)return false;
-      if(usedLabels.some(t=>box.x<t.x+t.w&&box.x+box.w>t.x&&box.y<t.y+t.h&&box.y+box.h>t.y))return false;
-      if(allIconBoxes.some(t=>t.id!==s.id&&box.x<t.x+t.w&&box.x+box.w>t.x&&box.y<t.y+t.h&&box.y+box.h>t.y))return false;
+      if(!fits(box,3))return false;
+      if(usedLabels.some(t=>overlaps(box,t,3)))return false;
+      if(occupiedMarkers.some(t=>t.id!==s.id&&overlaps(box,t)))return false;
       usedLabels.push(box);return true;
     });
     if(acceptable){
@@ -1010,8 +1049,8 @@ function renderMap(){
   });
   Object.keys(personBySettlement).forEach(function(id){
     const s=getSet(id);if(!s)return;
-    const p=geoScreenPosition(s.lon,s.lat,m);
-    const badge=mapEl("button","map-person",p.x-31,p.y+26,"人"+personBySettlement[id]);
+    const p=markerPositions.get(s.id)||geoScreenPosition(s.lon,s.lat,m);
+    const badge=mapEl("button","map-person",p.x-31,p.y+31,"人"+personBySettlement[id]);
     badge.title=s.name+" 驻地人物 "+personBySettlement[id]+" 名";
     badge.onclick=function(e){e.stopPropagation();selectSettlement(id);};
     scene.appendChild(badge);
@@ -1020,7 +1059,7 @@ function renderMap(){
     if(armyMen(a)<=0)return;
     const s=getSet(a.at);if(!s)return;
     if(a.owner!==state.player&&intelLevel(s)<=0)return;
-    const p=geoScreenPosition(s.lon,s.lat,m);
+    const p=markerPositions.get(s.id)||geoScreenPosition(s.lon,s.lat,m);
     const army=mapEl("button","army-token map-army "+(a.owner===state.player?"friendly":isHostile(state.player,a.owner)?"enemy":"foreign")+
       (a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
     const count=a.owner===state.player?fmt(armyMen(a)):intelLevel(s)>=3?fmt(armyMen(a)):intelLevel(s)===2?"约"+fmt(roughNumber(armyMen(a),100)):"？";
