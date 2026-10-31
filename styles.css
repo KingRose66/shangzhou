@@ -454,3 +454,9 @@ dialog::backdrop{background:#0009}
   .map .node-label.geo-label.geo-city-label{font-size:11px}
   .map .node.geo-node.city-sprite{min-width:52px;min-height:52px}
 }
+
+/* v1.8 decluttering: preserve exact geo anchors while offsetting dense sprites */
+.city-leaders{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none}
+.city-leader{fill:none;stroke:#f0d6a7;stroke-width:1.6;stroke-dasharray:3.5 3;stroke-linecap:round;filter:drop-shadow(0 1px 2px #090c09)}
+.city-true-anchor{fill:#f5d5a2;stroke:#27302d;stroke-width:1.8}
+.map .node.geo-node.city-sprite{z-index:12}
