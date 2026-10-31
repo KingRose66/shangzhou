@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "1.6.0",
+  version: "1.7.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
@@ -207,7 +207,33 @@ const GAME_DATA = {
     {id:"east_lord",name:"东方盟主",faction:"dongfang",role:"地方君长",age:40,command:71,martial:68,admin:64,intrigue:61,diplomacy:62,ritual:58,prestige:57,trait:"东土联结",alive:true,confidence:"C"},
     {id:"jiang_lord",name:"江汉君长",faction:"jianghan",role:"地方君长",age:37,command:67,martial:66,admin:65,intrigue:57,diplomacy:64,ritual:61,prestige:52,trait:"舟陆并用",alive:true,confidence:"C"},
     {id:"wu_lord",name:"南方君长",faction:"wucheng",role:"地方君长",age:42,command:65,martial:62,admin:70,intrigue:59,diplomacy:60,ritual:67,prestige:56,trait:"青铜工艺",alive:true,confidence:"C"},
-    {id:"shu_lord",name:"蜀地君长",faction:"shu",role:"地方君长",age:39,command:69,martial:65,admin:72,intrigue:66,diplomacy:58,ritual:78,prestige:68,trait:"古蜀礼器传统",alive:true,confidence:"C"}
+    {id:"shu_lord",name:"蜀地君长",faction:"shu",role:"地方君长",age:39,command:69,martial:65,admin:72,intrigue:66,diplomacy:58,ritual:78,prestige:68,trait:"古蜀礼器传统",alive:true,confidence:"C"},
+    {id:"shang_ya_yin",name:"亚尹伯",faction:"shang",role:"王畿族长",age:57,command:78,martial:72,admin:59,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"守成威权",alive:true,confidence:"C",location:{kind:"settlement",id:"yin"}},
+    {id:"shang_zuo_ce",name:"作册小乙",faction:"shang",role:"王廷史臣",age:35,command:62,martial:43,admin:84,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"谨慎占断",alive:true,confidence:"C",location:{kind:"settlement",id:"yin"}},
+    {id:"shang_tian",name:"田臣丙",faction:"shang",role:"农事官",age:38,command:52,martial:43,admin:86,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"善治仓廪",alive:true,confidence:"C",location:{kind:"settlement",id:"nan"}},
+    {id:"shang_zhen",name:"贞人壬",faction:"shang",role:"占卜官",age:48,command:54,martial:43,admin:66,intrigue:53,diplomacy:55,ritual:85,prestige:48,trait:"谨慎占断",alive:true,confidence:"C",location:{kind:"settlement",id:"yin"}},
+    {id:"shang_rong",name:"戍长戎",faction:"shang",role:"边邑将领",age:39,command:79,martial:72,admin:49,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"山地熟习",alive:true,confidence:"C",location:{kind:"settlement",id:"jinnan"}},
+    {id:"shang_zhu",name:"百工祖甲",faction:"shang",role:"铸作首领",age:44,command:49,martial:43,admin:76,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"青铜工艺",alive:true,confidence:"C",location:{kind:"settlement",id:"daxinzhuang"}},
+    {id:"zhou_ji_jue",name:"姬伯觉",faction:"zhou",role:"宗族将领",age:34,command:77,martial:72,admin:54,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"族兵凝聚",alive:true,confidence:"C",location:{kind:"settlement",id:"zhouyuan"}},
+    {id:"zhou_jiang",name:"姜伯言",faction:"zhou",role:"婚盟使者",age:39,command:46,martial:43,admin:71,intrigue:53,diplomacy:79,ritual:56,prestige:48,trait:"东土联结",alive:true,confidence:"C",location:{kind:"settlement",id:"zhouyuan"}},
+    {id:"zhou_ya",name:"周作册庚",faction:"zhou",role:"史臣",age:41,command:48,martial:43,admin:81,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"善治仓廪",alive:true,confidence:"C",location:{kind:"settlement",id:"zhouyuan"}},
+    {id:"zhou_zhao",name:"周田臣仲",faction:"zhou",role:"田事主管",age:36,command:55,martial:43,admin:83,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"善治仓廪",alive:true,confidence:"C",location:{kind:"settlement",id:"weis"}},
+    {id:"zhou_shan",name:"渭上伯辛",faction:"zhou",role:"边地将领",age:29,command:75,martial:72,admin:53,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"西土开拓",alive:true,confidence:"C",location:{kind:"settlement",id:"weis"}},
+    {id:"gao_shi",name:"高地族伯犬",faction:"gaodi",role:"山地将领",age:33,command:80,martial:72,admin:55,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"山地熟习",alive:true,confidence:"C",location:{kind:"settlement",id:"gaodi"}},
+    {id:"gao_ji",name:"李崖田臣",faction:"gaodi",role:"仓廪主管",age:40,command:53,martial:43,admin:76,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"善治仓廪",alive:true,confidence:"C",location:{kind:"settlement",id:"lijia"}},
+    {id:"gao_hu",name:"黄河戍伯",faction:"gaodi",role:"渡口统领",age:38,command:73,martial:72,admin:57,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"山地熟习",alive:true,confidence:"C",location:{kind:"settlement",id:"gaodi"}},
+    {id:"east_zhu",name:"东方族伯戊",faction:"dongfang",role:"邑族首领",age:47,command:59,martial:43,admin:76,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"东土联结",alive:true,confidence:"C",location:{kind:"settlement",id:"qianzhangda"}},
+    {id:"east_zhong",name:"海岱伯仲",faction:"dongfang",role:"边地将领",age:31,command:75,martial:72,admin:54,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"车战娴熟",alive:true,confidence:"C",location:{kind:"settlement",id:"haidai"}},
+    {id:"east_yan",name:"前掌大作册",faction:"dongfang",role:"地方史臣",age:43,command:46,martial:43,admin:79,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"谨慎占断",alive:true,confidence:"C",location:{kind:"settlement",id:"qianzhangda"}},
+    {id:"han_bo",name:"江汉舟伯",faction:"jianghan",role:"舟陆将领",age:39,command:73,martial:72,admin:60,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"舟陆并用",alive:true,confidence:"C",location:{kind:"settlement",id:"jianghan"}},
+    {id:"han_cang",name:"江汉仓臣",faction:"jianghan",role:"农事主管",age:45,command:47,martial:43,admin:83,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"善治仓廪",alive:true,confidence:"C",location:{kind:"settlement",id:"jianghan"}},
+    {id:"han_zhu",name:"南土作坊长",faction:"jianghan",role:"工匠首领",age:37,command:52,martial:43,admin:72,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"青铜工艺",alive:true,confidence:"C",location:{kind:"settlement",id:"jianghan"}},
+    {id:"wu_tao",name:"吴城陶范师",faction:"wucheng",role:"制范首领",age:46,command:44,martial:43,admin:82,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"青铜工艺",alive:true,confidence:"C",location:{kind:"settlement",id:"wucheng"}},
+    {id:"wu_shan",name:"赣江猎长",faction:"wucheng",role:"山地将领",age:30,command:72,martial:72,admin:55,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"山地熟习",alive:true,confidence:"C",location:{kind:"settlement",id:"wucheng"}},
+    {id:"wu_ji",name:"南土族长乙",faction:"wucheng",role:"族邑主管",age:40,command:61,martial:43,admin:73,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"族兵凝聚",alive:true,confidence:"C",location:{kind:"settlement",id:"wucheng"}},
+    {id:"shu_bai",name:"蜀邑祭伯",faction:"shu",role:"祭祀首领",age:52,command:49,martial:43,admin:72,intrigue:53,diplomacy:55,ritual:85,prestige:48,trait:"古蜀礼器传统",alive:true,confidence:"C",location:{kind:"settlement",id:"shu"}},
+    {id:"shu_tong",name:"蜀地铜作师",faction:"shu",role:"铸工首领",age:38,command:42,martial:43,admin:84,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"青铜工艺",alive:true,confidence:"C",location:{kind:"settlement",id:"shu"}},
+    {id:"shu_han",name:"蜀道戍长",faction:"shu",role:"山地将领",age:32,command:77,martial:72,admin:53,intrigue:53,diplomacy:55,ritual:56,prestige:48,trait:"山地熟习",alive:true,confidence:"C",location:{kind:"settlement",id:"shu"}}
   ],
 
   successions: {
