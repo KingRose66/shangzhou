@@ -95,8 +95,14 @@ try{
   const afterCombinedDistance=await distanceBetween();
   assert(afterCombinedDistance>beforeCombinedDistance*1.18,
     "combined pan/pinch failed to change scale");
-  assert(Math.hypot(afterCombined.x-beforeCombined.x,afterCombined.y-beforeCombined.y)>20,
-    "combined pan/pinch failed to move map");
+  // Scale can offset the apparent movement of an individual city marker.
+  // Compare against a zoom-only transform to isolate the midpoint translation.
+  const gestureScale=afterCombinedDistance/beforeCombinedDistance;
+  const zoomOnlyX=mx+(beforeCombined.x-mx)*gestureScale;
+  const zoomOnlyY=my+(beforeCombined.y-my)*gestureScale;
+  const recoveredPan={x:afterCombined.x-zoomOnlyX,y:afterCombined.y-zoomOnlyY};
+  assert(Math.abs(recoveredPan.x-(-65))<20&&Math.abs(recoveredPan.y-45)<20,
+    "combined pan/pinch should preserve centroid translation: "+JSON.stringify(recoveredPan));
   assert(errors.length===0,"Browser errors during gestures: "+errors.join(" | "));
   console.log("Real mouse/touch gestures passed: city-origin mouse drag, two-finger pan, pinch-in, pinch-out, simultaneous pan+zoom.");
 }finally{
