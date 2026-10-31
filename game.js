@@ -763,7 +763,7 @@ function setupGeographicInteraction(map,m){
     if(mouse&&mouse.id===e.pointerId)finishMouse(e,false);
   },opts);
   map.addEventListener("click",e=>{
-    if(performance.now()<map._ignoreClicksUntil){
+    if(performance.now()<map._ignoreClicksUntil&&!e.target.closest(".geo-map-controls")){
       e.preventDefault();
       e.stopImmediatePropagation();
     }
