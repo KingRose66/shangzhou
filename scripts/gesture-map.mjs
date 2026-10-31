@@ -10,9 +10,12 @@ const server=http.createServer((req,res)=>{
   const file=path.resolve(root,"."+(url==="/"?"/index.html":url));
   if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}
   try{
+    // Read before writing response headers. Edge requests additional optional
+    // paths, including missing favicon resources; a 404 must remain a 404.
+    const contents=fs.readFileSync(file);
     res.writeHead(200,{"Content-Type":mime[path.extname(file)]||"application/octet-stream"});
-    res.end(fs.readFileSync(file));
-  }catch(_){res.writeHead(404).end();}
+    res.end(contents);
+  }catch(_){if(!res.headersSent)res.writeHead(404);res.end();}
 });
 const assert=(condition,message)=>{if(!condition)throw new Error(message);};
 const center=box=>({x:box.x+box.width/2,y:box.y+box.height/2});
