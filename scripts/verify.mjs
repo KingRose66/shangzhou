@@ -45,7 +45,7 @@ for (const id of [
   if(!html.includes(`id="${id}"`)) throw new Error(`Missing DOM id ${id}`);
 }
 for(const src of ["data.js","battle.js","game.js"]){
-  if(!html.includes(`src="${src}"`)) throw new Error(`Missing script reference ${src}`);
+  if(!html.includes(`src="${src}"`)&&!html.includes(`src="${src}?`)) throw new Error(`Missing script reference ${src}`);
 }
 
 console.log("Shangzhou static verification passed.");
