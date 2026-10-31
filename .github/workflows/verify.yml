@@ -31,6 +31,8 @@ jobs:
         run: node scripts/geography-characters.mjs
       - name: Real browser geographic map verification
         run: node scripts/visual-map.mjs
+      - name: Mouse and two-finger touch gesture integration
+        run: node scripts/gesture-map.mjs
       - name: Upload geographic map screenshot
         if: always()
         uses: actions/upload-artifact@v4
