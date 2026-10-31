@@ -41,14 +41,14 @@ for(const node of w.GAME_DATA.settlements){
 w.SHANGZHOU_DEBUG.startGame("shang");
 assert($(".geographic-map"),"real geography map not mounted");
 assert(w.document.querySelectorAll(".geo-node").length===w.GAME_DATA.settlements.length,"all settlement markers must be visible at fit");
-assert(w.document.querySelectorAll(".geographic-tile").length>=8,"real relief/imagery tiles not mounted");
-assert($(".geographic-tile").src.includes("World_Imagery"),"initial basemap should be realistic imagery");
+assert(w.document.querySelectorAll(".geographic-tile").length===1,"packaged terrain raster missing");
+assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"local NASA image not mounted");
 const controls=w.document.querySelectorAll(".geo-map-controls button");
 assert(controls.length===4,"zoom/fullscreen/terrain controls missing");
 controls[3].click();
-assert($(".geographic-tile").src.includes("World_Hillshade"),"relief toggle did not replace basemap");
+assert($(".geographic-tile").src.includes("assets/china-relief.webp"),"local relief toggle failed");
 w.document.querySelectorAll(".geo-map-controls button")[3].click();
-assert($(".geographic-tile").src.includes("World_Imagery"),"return to imagery failed");
+assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"return to imagery failed");
 
 assert(w.SHANGZHOU_DEBUG.positionForTest("wen_ding").id==="yin","Wen Ding should start in the Shang capital");
 assert(w.SHANGZHOU_DEBUG.positionForTest("shang_general").kind==="army","field commander should start with field army");
