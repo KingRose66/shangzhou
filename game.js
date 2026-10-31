@@ -711,7 +711,7 @@ function setupGeographicInteraction(map,m){
   const scene=map.querySelector(".geo-map-scene");
   let mouse=null;
   let touchGesture=null;
-  let ignoreClicksUntil=0;
+  map._ignoreClicksUntil=map._ignoreClicksUntil||0;
   const tolerance=5;
   const clamp=(value,low,high)=>Math.max(low,Math.min(high,value));
   const pointerCoordinates=(x,y)=>{
@@ -732,7 +732,7 @@ function setupGeographicInteraction(map,m){
     map.classList.remove("panning");
     if(moved&&!cancelled){
       geographicGestureCommit(m,1,dx,dy);
-      ignoreClicksUntil=performance.now()+500;
+      map._ignoreClicksUntil=performance.now()+500;
       renderMap();
     }else if(scene){
       scene.style.transform="";
@@ -763,7 +763,7 @@ function setupGeographicInteraction(map,m){
     if(mouse&&mouse.id===e.pointerId)finishMouse(e,false);
   },opts);
   map.addEventListener("click",e=>{
-    if(performance.now()<ignoreClicksUntil){
+    if(performance.now()<map._ignoreClicksUntil){
       e.preventDefault();
       e.stopImmediatePropagation();
     }
@@ -812,7 +812,7 @@ function setupGeographicInteraction(map,m){
     map.classList.remove("panning");
     if(done.moved){
       geographicGestureCommit(m,done.scale,done.tx,done.ty);
-      ignoreClicksUntil=performance.now()+500;
+      map._ignoreClicksUntil=performance.now()+500;
       renderMap();
     }else if(scene)scene.style.transform="";
   };
@@ -2737,7 +2737,7 @@ function loadGame(){
     const raw=localStorage.getItem("shangzhou-save");
     if(!raw)return notice("没有找到本机存档。");
     const loaded=JSON.parse(raw);
-    if(![DATA.version,"1.4.0","1.3.0","1.2.0"].includes(loaded.version)){
+    if(![DATA.version,"1.5.0","1.4.0","1.3.0","1.2.0"].includes(loaded.version)){
       return notice("该存档来自 "+(loaded.version||"旧版本")+"，当前版本为 "+DATA.version+"。地图或人物基础数据发生过较大变化，请开始新局。","存档版本不兼容");
     }
     loaded.version=DATA.version;
