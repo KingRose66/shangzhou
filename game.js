@@ -630,6 +630,9 @@ function realTerrainTiles(parent,m){
   parent.appendChild(wash);
 }
 
+function nodeBlocked(id,owner){
+  return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
+}
 function geographicRoutes(map,m,selectedEdges){
   const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
   svg.setAttribute("class","geographic-routes");
