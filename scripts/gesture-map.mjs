@@ -19,7 +19,7 @@ const center=box=>({x:box.x+box.width/2,y:box.y+box.height/2});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 let browser;
 try{
-  browser=await chromium.launch({headless:true});
+  browser=await chromium.launch({headless:true, ...(process.env.BROWSER_CHANNEL?{channel:process.env.BROWSER_CHANNEL}:{})});
   const page=await browser.newPage({viewport:{width:1500,height:1000},hasTouch:true});
   const errors=[];
   page.on("pageerror",e=>errors.push(e.message));
@@ -103,8 +103,44 @@ try{
   const recoveredPan={x:afterCombined.x-zoomOnlyX,y:afterCombined.y-zoomOnlyY};
   assert(Math.abs(recoveredPan.x-(-65))<20&&Math.abs(recoveredPan.y-45)<20,
     "combined pan/pinch should preserve centroid translation: "+JSON.stringify(recoveredPan));
-  assert(errors.length===0,"Browser errors during gestures: "+errors.join(" | "));
-  console.log("Real mouse/touch gestures passed: city-origin mouse drag, two-finger pan, pinch-in, pinch-out, simultaneous pan+zoom.");
+  // Precision touchpad on Windows Edge: TWO-FINGER SLIDE is wheel scrolling
+  // (deltaY/deltaX), not two TouchEvents. It must PAN and preserve the zoom level.
+  await page.locator(".geo-map-controls button").filter({hasText:"全图"}).click();
+  await page.mouse.move(mx,my);
+  const wheelBefore=center(await yin.boundingBox());
+  const wheelDistBefore=await distanceBetween();
+  await page.mouse.wheel(82,68);
+  await page.waitForTimeout(100);
+  const wheelAfter=center(await yin.boundingBox());
+  const wheelDistAfter=await distanceBetween();
+  assert(Math.hypot(wheelAfter.x-wheelBefore.x,wheelAfter.y-wheelBefore.y)>36,
+    "Edge precision touchpad wheel slide must pan the map: "+JSON.stringify({wheelBefore,wheelAfter}));
+  assert(Math.abs(wheelDistAfter/wheelDistBefore-1)<.03,
+    "Touchpad pan must not change map zoom");
+
+  // Ctrl + wheel is the Chromium/Edge precision-touchpad pinch signal.
+  const pinchBefore=await distanceBetween();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0,-135);
+  await page.keyboard.up("Control");
+  await page.waitForTimeout(100);
+  const pinchAfter=await distanceBetween();
+  assert(pinchAfter>pinchBefore*1.1,
+    "Edge precision touchpad Ctrl+wheel pinch should zoom in: "+pinchBefore+" => "+pinchAfter);
+
+  // Physical mouse owners can choose explicit wheel-zoom mode.
+  await page.locator(".geo-map-controls button").filter({hasText:"触控板"}).click();
+  const physicalWheelBefore=await distanceBetween();
+  await page.mouse.move(mx,my);
+  await page.mouse.wheel(0,120);
+  await page.waitForTimeout(100);
+  const physicalWheelAfter=await distanceBetween();
+  assert(physicalWheelAfter<physicalWheelBefore*.92,
+    "mouse wheel zoom mode should shrink inter-city distances");
+
+    assert(errors.length===0,"Browser errors during gestures: "+errors.join(" | "));
+  console.log("Real gestures passed:",process.env.BROWSER_CHANNEL||"chromium",
+    "mouse drag, touchscreen dual touch, Edge precision-touchpad wheel pan, Ctrl-wheel pinch, mouse-wheel toggle.");
 }finally{
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
