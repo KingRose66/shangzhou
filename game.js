@@ -925,6 +925,24 @@ function settlementMarkerSize(s){
   return s.capital?60:52;
 }
 function renderMap(){
+  const jump=$("#map-city-jump");
+  if(jump){
+    jump.innerHTML="";
+    state.settlements.slice().sort(function(a,b){return a.name.localeCompare(b.name,"zh-Hans-CN");}).forEach(function(s){
+      const option=document.createElement("option");
+      option.value=s.id;
+      option.textContent=s.name+" · "+ownerName(s.owner);
+      jump.appendChild(option);
+    });
+    jump.value=state.selectedSettlement;
+    jump.onchange=function(){
+      const s=getSet(jump.value);
+      if(!s)return;
+      geoMapView.lon=s.lon;geoMapView.lat=s.lat;
+      geoMapView.zoomDelta=Math.max(.45,geoMapView.zoomDelta);
+      selectSettlement(s.id);
+    };
+  }
   const map=$("#map");
   map.innerHTML="";
   map.classList.add("geographic-map");
