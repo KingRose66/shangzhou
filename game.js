@@ -193,6 +193,53 @@ function setIntel(id,level,duration){
   state.intel=state.intel||{};
   state.intel[id]={level:Math.max(level,state.intel[id]?.level||0),expires:state.tick+(duration||4)};
 }
+const CITY_POLICIES={
+  balanced:{name:"均衡施政",description:"农、商、军需均衡，不额外征发。"},
+  farm:{name:"劝课农桑",description:"秋收+18%，贝收入-8%，草料增加。"},
+  trade:{name:"鼓励交换",description:"贝收入+22%，秋收-5%。"},
+  military:{name:"整饬军备",description:"木骨兵器和青铜加工+22%，秋收-8%，地方安定恢复略慢。"},
+  pacify:{name:"安抚族邑",description:"地方服从度恢复更快，贝收入-16%。"}
+};
+function cityPolicy(s){return CITY_POLICIES[s.policy]||CITY_POLICIES.balanced;}
+function applyCityPolicy(cityId,policyId){
+  const s=getSet(cityId),f=faction(state.player),p=CITY_POLICIES[policyId];
+  if(!s||s.owner!==state.player||!p)return;
+  if(s.delegated)return notice("该城已委任邑宰自动施政，请先取消委任。");
+  if((s.policy||"balanced")===policyId)return;
+  if(f.shells<60)return notice("调整城邑施政需要60贝，以补偿调配人手和仓务。");
+  if(s.policyTick!=null&&state.tick-s.policyTick<2)return notice("施政调整后至少维持两季，不能频繁切换。");
+  f.shells-=60;s.policy=policyId;s.policyTick=state.tick;
+  addLog(s.name+"改为「"+p.name+"」，支付调配费用60贝。");
+  render();
+}
+function toggleCityDelegation(cityId,value){
+  const s=getSet(cityId);
+  if(!s||s.owner!==state.player)return;
+  if(value&&!activeGovernor(s))return notice("必须先任命实际驻城的邑宰才能委任治理。");
+  s.delegated=!!value;
+  addLog(s.name+(s.delegated?"交由邑宰根据粮情、军需和服从度择策。":"收回自主施政权。"));
+  render();
+}
+function processCityPolicies(){
+  state.settlements.forEach(function(s){
+    if(!s.delegated)return;
+    const gov=activeGovernor(s);
+    if(!gov){s.delegated=false;return;}
+    const pop=s.pop.clan+s.pop.slave;
+    const border=s.roads.some(function(id){return getSet(id).owner!==s.owner;});
+    let desired="balanced";
+    if(s.control<72)desired="pacify";
+    else if(s.grain<pop*.06)desired="farm";
+    else if(border&&s.weapons.ge+s.weapons.spear<200&&s.forge>0)desired="military";
+    else if(s.market>=2&&s.grain>pop*.1)desired="trade";
+    if(desired!==(s.policy||"balanced")&&(s.policyTick==null||state.tick-s.policyTick>=2)){
+      const owner=faction(s.owner);
+      if(owner.shells>=25){owner.shells-=25;s.policy=desired;s.policyTick=state.tick;
+        if(s.owner===state.player)addLog("邑宰在"+s.name+"调整为「"+cityPolicy(s).name+"」，支出25贝。");
+      }
+    }
+  });
+}
 function controlEfficiency(s){
   const control=typeof s.control==="number"?s.control:100;
   return .55+Math.max(0,Math.min(100,control))*.0045;
@@ -366,7 +413,7 @@ function chariotCount(a){
 function freshState(player){
   const chars=deepCopy(DATA.characters);
   const settlements=deepCopy(DATA.settlements);
-  settlements.forEach(function(s){s.control=100;});
+  settlements.forEach(function(s){s.control=100;s.policy="balanced";s.delegated=false;s.policyTick=-10;});
   return {
     version:DATA.version,player:player||"shang",year:-1115,season:0,turn:1,idCounter:30,
     factions:deepCopy(DATA.factions),
@@ -989,6 +1036,7 @@ function forecastHarvest(s){
   }
   if(gov&&gov.trait==="善治仓廪")crop*=1.08;
   if(hasTech(s.owner,"wei_farming"))crop*=1.08;
+  crop*=s.policy==="farm"?1.18:s.policy==="military"?.92:s.policy==="trade"?.95:1;
   crop*=controlEfficiency(s);
   return Math.max(0,Math.round(crop));
 }
@@ -1066,9 +1114,16 @@ function renderSettlement(){
     '<p class="small">现存粮约可覆盖本地 '+foodTurns.toFixed(1)+' 个季度的基础口粮；按当前征发状态，预计秋收约 <b>'+fmt(forecastHarvest(s))+' 石</b>。</p>'+
     '<p class="small good">可在此征募、采买、训练并征调民夫。</p>'+
     '<p class="small char-location">城中人物：'+(characterInCityNames(s.id).join("、")||"无")+'</p>'+
+    '<div class="city-policy"><div class="small"><b>城邑施政</b> · '+(s.delegated?"邑宰委任":"直接管理")+'</div>'+
+    '<select id="city-policy-select" '+(s.delegated?"disabled":"")+'>'+
+    Object.keys(CITY_POLICIES).map(function(key){return '<option value="'+key+'" '+((s.policy||"balanced")===key?"selected":"")+'>'+CITY_POLICIES[key].name+'</option>';}).join("")+
+    '</select><div class="small muted">'+cityPolicy(s).description+'（改策60贝，至少维持两季）</div>'+
+    '<label class="city-delegate-label"><input id="city-delegate" type="checkbox" '+(s.delegated?"checked":"")+' '+(!governor?"disabled":"")+' /> 委任驻城邑宰按粮情、军备和服从度自动施政</label></div>'+
     '<div class="army-orders"><label>邑宰 / 主政者</label><select id="governor-select">'+govOptions+'</select></div>'+
     '<p class="small muted">史实置信度：'+s.confidence+'｜'+s.region+'</p>';
   $("#governor-select").onchange=function(){assignGovernor(s.id,this.value);};
+  $("#city-policy-select").onchange=function(){applyCityPolicy(s.id,this.value);};
+  $("#city-delegate").onchange=function(){toggleCityDelegation(s.id,this.checked);};
 }
 
 function renderDiplomacy(){
@@ -1871,15 +1926,16 @@ function settlementEconomy(){
       govEco*=loyalty<35?.92:loyalty>80?1.03:1;
     }
     if(gov&&gov.trait==="善治仓廪")govEco*=1.08;
-    owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco*controlEfficiency(s));
+    const taxFactor=s.policy==="trade"?1.22:s.policy==="pacify"?.84:s.policy==="farm"?.92:1;
+    owner.shells+=Math.round(pop*.00055*(1+s.market*.32)*govEco*controlEfficiency(s)*taxFactor);
 
-    const woodGain=Math.round(pop*.0025*(hasTech(s.owner,"local_craft")?1.10:1));
+    const woodGain=Math.round(pop*.0025*(hasTech(s.owner,"local_craft")?1.10:1)*(s.policy==="military"?1.22:1));
     s.weapons.wood+=woodGain;
     s.weapons.bow+=Math.round(pop*.00022);
 
     if(s.forge>0&&s.bronze>5){
       const craftGov=activeGovernor(s);
-      const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1)*(craftGov&&craftGov.trait==="青铜工艺"?1.15:1);
+      const mult=(hasTech(s.owner,"piece_mold")?1.2:1)*(hasTech(s.owner,"improved_mold")?1.15:1)*(craftGov&&craftGov.trait==="青铜工艺"?1.15:1)*(s.policy==="military"?1.22:1);
       const use=Math.min(s.bronze,Math.round(s.forge*12));
       s.bronze-=use;
       s.weapons.ge+=Math.round(use*.52*mult);
@@ -1887,7 +1943,7 @@ function settlementEconomy(){
     }
 
     const fodderMult=hasTech(s.owner,"highland_stock")?1.15:1;
-    s.fodder+=Math.round(pop*.004*s.farm/100*fodderMult);
+    s.fodder+=Math.round(pop*.004*s.farm/100*fodderMult*(s.policy==="farm"?1.12:1));
   });
 }
 
@@ -1962,6 +2018,8 @@ function processLocalControl(){
     let gain=1.5;
     if(gov)gain+=1.5+Math.max(0,(gov.admin-55)/30);
     if(garrison)gain+=2.5;
+    if(s.policy==="pacify")gain+=3;
+    if(s.policy==="military")gain-=.65;
     gain+=Math.max(0,(faction(s.owner).prestige-50)/80);
     s.control=Math.min(100,s.control+gain);
   });
@@ -2222,6 +2280,7 @@ function endTurn(){
   if(turnBusy||state.gameOver||pendingWorldEvent||pendingBattleReport)return;
   turnBusy=true;
   processTraining();
+  processCityPolicies();
   settlementEconomy();
   processTribute();
   processSieges();
@@ -2780,6 +2839,9 @@ function loadGame(){
     state.tick=state.tick||0;
     state.settlements.forEach(function(s){
       if(typeof s.control!=="number")s.control=100;
+      if(!CITY_POLICIES[s.policy])s.policy="balanced";
+      if(typeof s.delegated!=="boolean")s.delegated=false;
+      if(typeof s.policyTick!=="number")s.policyTick=-10;
       const ref=DATA.settlements.find(x=>x.id===s.id);
       if(ref){s.lat=ref.lat;s.lon=ref.lon;s.geographyConfidence=ref.geographyConfidence;}
     });
