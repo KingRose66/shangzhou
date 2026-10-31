@@ -9,7 +9,7 @@ let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
 let pendingBattleReport = null;
-const geoMapView={lon:null,lat:null,zoomDelta:0,mode:'imagery'};
+const geoMapView={lon:null,lat:null,zoomDelta:0,mode:'imagery',wheelMode:'pan'};
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -680,7 +680,10 @@ function createMapControls(map){
     }],
     [geoMapView.mode==="imagery"?"地形":"卫星","切换真实地形与卫星影像",function(){
       geoMapView.mode=geoMapView.mode==="imagery"?"relief":"imagery";renderMap();
-    }]
+    }],
+    [geoMapView.wheelMode==="pan"?"触控板":"鼠标滚轮",
+      geoMapView.wheelMode==="pan"?"当前：双指滑动平移，双指捏合缩放；点击切换普通滚轮缩放":"当前：普通滚轮缩放；点击切换触控板双指平移",
+      function(){geoMapView.wheelMode=geoMapView.wheelMode==="pan"?"zoom":"pan";renderMap();}]
   ];
   controlsData.forEach(function(x){
     const btn=document.createElement("button");
@@ -740,27 +743,32 @@ function setupGeographicInteraction(map,m){
     try{map.releasePointerCapture(e.pointerId);}catch(_){}
   };
 
-  // Mouse: drag can start on terrain or a city icon, but a stationary click still
-  // selects the city. Capture only after movement exceeds a short threshold.
-  map.addEventListener("pointerdown",e=>{
+  // Windows Edge: listen on the WINDOW, not only the map, so dragging continues
+  // across the map's child layers, scroll container and document boundaries.
+  const pointerDown=e=>{
     if(e.pointerType==="touch"||e.button!==0||e.target.closest(".geo-map-controls"))return;
+    if(mouse)return;
     mouse={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
-  },opts);
-  map.addEventListener("pointermove",e=>{
+  };
+  const pointerMove=e=>{
     if(!mouse||e.pointerId!==mouse.id)return;
     const dx=e.clientX-mouse.x,dy=e.clientY-mouse.y;
     if(!mouse.moved&&Math.hypot(dx,dy)<tolerance)return;
     if(!mouse.moved){
       mouse.moved=true;
       map.classList.add("panning");
+      // Capturing is deliberately late; a stationary click still selects a city.
       try{map.setPointerCapture(e.pointerId);}catch(_){}
     }
     applyPreview(1,dx,dy);
-  },opts);
-  map.addEventListener("pointerup",e=>finishMouse(e,false),opts);
-  map.addEventListener("pointercancel",e=>finishMouse(e,true),opts);
-  map.addEventListener("lostpointercapture",e=>{
-    if(mouse&&mouse.id===e.pointerId)finishMouse(e,false);
+    if(e.cancelable)e.preventDefault();
+  };
+  map.addEventListener("pointerdown",pointerDown,opts);
+  window.addEventListener("pointermove",pointerMove,{capture:true,signal:controller.signal});
+  window.addEventListener("pointerup",e=>finishMouse(e,false),{capture:true,signal:controller.signal});
+  window.addEventListener("pointercancel",e=>finishMouse(e,true),{capture:true,signal:controller.signal});
+  window.addEventListener("blur",()=>{
+    if(mouse)finishMouse({pointerId:mouse.id,clientX:mouse.x,clientY:mouse.y},true);
   },opts);
   map.addEventListener("click",e=>{
     if(performance.now()<map._ignoreClicksUntil&&!e.target.closest(".geo-map-controls")){
@@ -820,10 +828,25 @@ function setupGeographicInteraction(map,m){
   map.addEventListener("touchmove",touchMove,{passive:false,signal:controller.signal});
   map.addEventListener("touchend",touchEnd,{passive:false,signal:controller.signal});
   map.addEventListener("touchcancel",touchEnd,{passive:false,signal:controller.signal});
+  // On Windows precision touchpads, a two-finger SCROLL arrives as WheelEvent,
+  // not TouchEvent. ctrlKey wheels are touchpad PINCH on Chromium/Edge.
+  // Default wheel behaviour is therefore pan; switch the visible toolbar
+  // button to "鼠标滚轮" to use a physical mouse wheel for zoom instead.
   map.addEventListener("wheel",e=>{
     if(e.target.closest(".geo-map-controls"))return;
-    e.preventDefault();
-    geoMapView.zoomDelta=clamp(geoMapView.zoomDelta+(e.deltaY<0?.35:-.35),-1.6,2.6);
+    if(e.cancelable)e.preventDefault();
+    const unit=e.deltaMode===1?16:e.deltaMode===2?m.h:1;
+    const isPinch=e.ctrlKey||e.metaKey;
+    if(isPinch||geoMapView.wheelMode==="zoom"){
+      const wheelDelta=clamp(e.deltaY*unit,-600,600);
+      const scale=Math.pow(2,-wheelDelta/420);
+      const pos=pointerCoordinates(e.clientX,e.clientY);
+      geographicGestureCommit(m,scale,pos.x*(1-scale),pos.y*(1-scale));
+    }else{
+      // Wheel scroll offsets describe document movement, so negate them
+      // to move the visible geographic layer under the user's fingers.
+      geographicGestureCommit(m,1,-e.deltaX*unit,-e.deltaY*unit);
+    }
     renderMap();
   },{passive:false,signal:controller.signal});
 }
