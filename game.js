@@ -9,7 +9,7 @@ let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
 let pendingBattleReport = null;
-const geoMapView={lon:111.62,lat:34.04,zoomDelta:0,mode:'imagery'};
+const geoMapView={lon:null,lat:null,zoomDelta:0,mode:'imagery'};
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -418,6 +418,7 @@ function freshState(player){
 }
 
 function startGame(player,options){
+  geoMapView.lon=null;geoMapView.lat=null;geoMapView.zoomDelta=0;
   state=freshState(player);
   pendingEncounter=null;pendingWorldEvent=null;pendingBattleReport=null;turnBusy=false;
   initializeCharacterLocations();
@@ -561,16 +562,28 @@ function geoLonLat(x,y,zoom){
   const n=Math.PI*(1-2*y/size);
   return {lon:x/size*360-180,lat:180/Math.PI*Math.atan(Math.sinh(n))};
 }
+function defaultGeographicCenter(){
+  const projected=state.settlements.map(s=>geoWorld(s.lon,s.lat,0));
+  const minX=Math.min(...projected.map(p=>p.x)),maxX=Math.max(...projected.map(p=>p.x));
+  const minY=Math.min(...projected.map(p=>p.y)),maxY=Math.max(...projected.map(p=>p.y));
+  return geoLonLat((minX+maxX)/2,(minY+maxY)/2,0);
+}
 function geographicMapMetrics(el){
   const w=el.clientWidth||960,h=el.clientHeight||625;
-  const world=state.settlements.map(s=>geoWorld(s.lon,s.lat,0));
-  const minX=Math.min(...world.map(p=>p.x)),maxX=Math.max(...world.map(p=>p.x));
-  const minY=Math.min(...world.map(p=>p.y)),maxY=Math.max(...world.map(p=>p.y));
-  const fitZoom=Math.log2(Math.min((w-110)/(maxX-minX),(h-100)/(maxY-minY)));
-  const zoom=Math.max(4.1,Math.min(8.5,fitZoom+geoMapView.zoomDelta));
-  const center=geoWorld(geoMapView.lon,geoMapView.lat,zoom);
-  return {w,h,zoom,center};
+  const projected=state.settlements.map(s=>geoWorld(s.lon,s.lat,0));
+  const minX=Math.min(...projected.map(p=>p.x)),maxX=Math.max(...projected.map(p=>p.x));
+  const minY=Math.min(...projected.map(p=>p.y)),maxY=Math.max(...projected.map(p=>p.y));
+  const naturalZoom=Math.log2(Math.min(
+    Math.max(100,w-165)/Math.max(.01,maxX-minX),
+    Math.max(100,h-125)/Math.max(.01,maxY-minY)));
+  const zoom=Math.max(4.1,Math.min(9.2,naturalZoom+geoMapView.zoomDelta));
+  if(!Number.isFinite(geoMapView.lon)||!Number.isFinite(geoMapView.lat)){
+    const center=defaultGeographicCenter();
+    geoMapView.lon=center.lon;geoMapView.lat=center.lat;
+  }
+  return {w,h,zoom,center:geoWorld(geoMapView.lon,geoMapView.lat,zoom)};
 }
+
 function geoScreenPosition(lon,lat,m){
   const p=geoWorld(lon,lat,m.zoom);
   return {x:p.x-m.center.x+m.w/2,y:p.y-m.center.y+m.h/2};
@@ -582,51 +595,41 @@ function mapEl(tag,cls,x,y,text){
   if(text!==undefined)e.textContent=text;
   return e;
 }
+// Bundled geospatial rasters: never depend on a third-party tile server at runtime.
+const GEO_LOCAL_RASTERS={
+  imagery:"assets/china-satellite.webp",
+  relief:"assets/china-relief.webp"
+};
+const GEO_RASTER_BOUNDS={west:100,east:121,south:26,north:41.5};
 function realTerrainTiles(parent,m){
   const layer=document.createElement("div");
   layer.className="geographic-tiles "+(geoMapView.mode==="relief"?"relief-tiles":"imagery-tiles");
-  const zoom=Math.max(0,Math.floor(m.zoom));
-  const scale=Math.pow(2,m.zoom-zoom);
-  const tileSize=256*scale;
-  const n=Math.pow(2,zoom);
-  const startX=Math.floor((m.center.x-m.w/2)/tileSize)-1;
-  const endX=Math.ceil((m.center.x+m.w/2)/tileSize);
-  const startY=Math.floor((m.center.y-m.h/2)/tileSize)-1;
-  const endY=Math.ceil((m.center.y+m.h/2)/tileSize);
-  let errors=0;
-  const tileBase=GEO_TILE_SOURCES[geoMapView.mode];
-  for(let ty=startY;ty<=endY;ty++){
-    if(ty<0||ty>=n)continue;
-    for(let tx=startX;tx<=endX;tx++){
-      const img=document.createElement("img");
-      img.className="geographic-tile";
-      img.alt="";
-      img.draggable=false;
-      img.decoding="async";
-      img.loading="eager";
-      img.src=tileBase+zoom+"/"+ty+"/"+((tx%n+n)%n);
-      img.style.width=(tileSize+1)+"px";
-      img.style.height=(tileSize+1)+"px";
-      img.style.left=(tx*tileSize-(m.center.x-m.w/2))+"px";
-      img.style.top=(ty*tileSize-(m.center.y-m.h/2))+"px";
-      img.onerror=function(){
-        this.classList.add("tile-unavailable");
-        if(++errors===3){
-          const tip=parent.querySelector(".tile-notice");
-          if(tip)tip.style.display="block";
-        }
-      };
-      layer.appendChild(img);
-    }
-  }
+  const northWest=geoScreenPosition(GEO_RASTER_BOUNDS.west,GEO_RASTER_BOUNDS.north,m);
+  const southEast=geoScreenPosition(GEO_RASTER_BOUNDS.east,GEO_RASTER_BOUNDS.south,m);
+  const image=document.createElement("img");
+  image.className="geographic-tile local-geography";
+  image.alt="华北至江汉、成都平原真实地貌";
+  image.draggable=false;
+  image.decoding="async";
+  image.loading="eager";
+  image.style.left=northWest.x+"px";
+  image.style.top=northWest.y+"px";
+  image.style.width=(southEast.x-northWest.x)+"px";
+  image.style.height=(southEast.y-northWest.y)+"px";
+  image.onload=function(){image.dataset.loaded="true";};
+  image.onerror=function(){
+    image.dataset.loaded="false";
+    const notice=parent.parentNode.querySelector(".tile-notice");
+    if(notice)notice.style.display="block";
+  };
+  image.src=GEO_LOCAL_RASTERS[geoMapView.mode];
+  layer.appendChild(image);
   parent.appendChild(layer);
   const wash=document.createElement("div");
   wash.className="geographic-wash";
   parent.appendChild(wash);
 }
-function nodeBlocked(id,owner){
-  return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
-}
+
 function geographicRoutes(map,m,selectedEdges){
   const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
   svg.setAttribute("class","geographic-routes");
@@ -673,7 +676,9 @@ function createMapControls(map){
   const controlsData=[
     ["+","放大",function(){geoMapView.zoomDelta=Math.min(2.6,geoMapView.zoomDelta+.45);renderMap();}],
     ["−","缩小",function(){geoMapView.zoomDelta=Math.max(-1.6,geoMapView.zoomDelta-.45);renderMap();}],
-    ["全图","复位",function(){geoMapView.zoomDelta=0;geoMapView.lon=111.62;geoMapView.lat=34.04;renderMap();}],
+    ["全图","复位全部城邑",function(){
+      geoMapView.zoomDelta=0;geoMapView.lon=null;geoMapView.lat=null;renderMap();
+    }],
     [geoMapView.mode==="imagery"?"地形":"卫星","切换真实地形与卫星影像",function(){
       geoMapView.mode=geoMapView.mode==="imagery"?"relief":"imagery";renderMap();
     }]
@@ -687,35 +692,42 @@ function createMapControls(map){
 }
 function setupGeographicInteraction(map,m){
   let dragging=null;
+  const endDrag=function(e,cancelled){
+    if(!dragging||dragging.id!==e.pointerId)return;
+    const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;
+    if(!cancelled&&(Math.abs(dx)+Math.abs(dy)>2)){
+      const old=geoWorld(dragging.lon,dragging.lat,m.zoom);
+      const next=geoLonLat(old.x-dx,old.y-dy,m.zoom);
+      geoMapView.lon=Math.max(100.8,Math.min(120,next.lon));
+      geoMapView.lat=Math.max(26.9,Math.min(40.8,next.lat));
+    }
+    dragging=null;
+    map.classList.remove("panning");
+    try{map.releasePointerCapture(e.pointerId);}catch(_){}
+    renderMap();
+  };
   map.onpointerdown=function(e){
+    if(e.button!==0)return;
     if(e.target.closest(".geo-node, .map-army, .map-person, .geo-map-controls"))return;
-    dragging={x:e.clientX,y:e.clientY,lon:geoMapView.lon,lat:geoMapView.lat};
+    e.preventDefault();
+    dragging={id:e.pointerId,x:e.clientX,y:e.clientY,lon:geoMapView.lon,lat:geoMapView.lat};
+    try{map.setPointerCapture(e.pointerId);}catch(_){}
     map.classList.add("panning");
   };
   map.onpointermove=function(e){
-    if(!dragging)return;
-    const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;
+    if(!dragging||e.pointerId!==dragging.id)return;
     const scene=map.querySelector(".geo-map-scene");
-    if(scene)scene.style.transform="translate("+dx+"px,"+dy+"px)";
+    if(scene)scene.style.transform="translate("+(e.clientX-dragging.x)+"px,"+(e.clientY-dragging.y)+"px)";
   };
-  const finish=function(e){
-    if(!dragging)return;
-    const center=geoWorld(dragging.lon,dragging.lat,m.zoom);
-    const next=geoLonLat(center.x-(e.clientX-dragging.x),center.y-(e.clientY-dragging.y),m.zoom);
-    geoMapView.lon=Math.max(101,Math.min(121,next.lon));
-    geoMapView.lat=Math.max(26,Math.min(41,next.lat));
-    dragging=null;
-    map.classList.remove("panning");
-    renderMap();
-  };
-  map.onpointerup=finish;
-  map.onpointercancel=function(){dragging=null;map.classList.remove("panning");renderMap();};
+  map.onpointerup=function(e){endDrag(e,false);};
+  map.onpointercancel=function(e){endDrag(e,true);};
   map.onwheel=function(e){
     e.preventDefault();
     geoMapView.zoomDelta=Math.max(-1.6,Math.min(2.6,geoMapView.zoomDelta+(e.deltaY<0?.35:-.35)));
     renderMap();
   };
 }
+
 function renderMap(){
   const map=$("#map");
   map.innerHTML="";
@@ -804,11 +816,13 @@ function renderMap(){
   createMapControls(map);
   const cite=document.createElement("div");
   cite.className="terrain-attribution";
-  cite.innerHTML='真实现代地貌底图 · © Esri / USGS / NASA　·　城邑部分为考古近似位置，势力疆域非历史实测';
+  cite.textContent=geoMapView.mode==="imagery"?
+    "真实现代地表影像 · NASA Blue Marble · 城邑为考古或区域定位":
+    "真实地形晕渲 · Tom Patterson / Natural Earth · 非晚商历史复原";
   map.appendChild(cite);
   const noticeEl=document.createElement("div");
   noticeEl.className="tile-notice";
-  noticeEl.textContent="地形影像暂时无法加载。请检查网络；战略节点仍可操作。";
+  noticeEl.textContent="内置地形文件未能载入。请刷新页面或核对站点部署，聚落仍可操作。";
   map.appendChild(noticeEl);
   setupGeographicInteraction(map,m);
 }
@@ -2628,6 +2642,7 @@ function loadGame(){
     }
     loaded.version=DATA.version;
     state=loaded;
+    geoMapView.lon=null;geoMapView.lat=null;geoMapView.zoomDelta=0;
     state.governors=state.governors||{};
     state.sieges=state.sieges||{};
     state.tribute=state.tribute||{};
