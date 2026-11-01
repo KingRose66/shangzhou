@@ -1,0 +1,15 @@
+{
+  "source": "Mapzen Terrain Tiles / AWS elevation-tiles-prod Terrarium",
+  "rivers": "Natural Earth 1:10m (when available)",
+  "projection": "EPSG:3857",
+  "zoom": 8,
+  "bounds": [
+    100.0,
+    26.0,
+    121.0,
+    41.5
+  ],
+  "width": 3600,
+  "height": 3200,
+  "note": "Present-day physical geography, not Shang-era hydrography"
+}
