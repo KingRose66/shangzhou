@@ -1112,7 +1112,7 @@ function renderMap(){
   cite.className="terrain-attribution";
   cite.textContent=geoMapView.mode==="imagery"?
     "真实现代地表影像 · NASA Blue Marble · 城邑为考古或区域定位":
-    "现代地形晕渲 · Mapzen / AWS高程（可用时）+ Tom Patterson · 非商周复原";
+    "现代地形晕渲 · Tom Patterson / Natural Earth · 非商周复原";
   map.appendChild(cite);
   const noticeEl=document.createElement("div");
   noticeEl.className="tile-notice";
