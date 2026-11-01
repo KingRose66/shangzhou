@@ -667,7 +667,24 @@ function realTerrainTiles(parent,m){
     const notice=parent.parentNode.querySelector(".tile-notice");
     if(notice)notice.style.display="block";
   };
-  image.src=GEO_LOCAL_RASTERS[geoMapView.mode];
+  // High-resolution true-elevation relief is optional: fall back to the
+  // pre-existing bundled topography when the DEM build is unavailable.
+  const reliefHighRes="assets/china-elevation.webp";
+  if(geoMapView.mode==="relief"){
+    image.onerror=function(){
+      if(image.dataset.fallback!=="yes"){
+        image.dataset.fallback="yes";
+        image.src=GEO_LOCAL_RASTERS.relief;
+        return;
+      }
+      image.dataset.loaded="false";
+      const notice=parent.parentNode.querySelector(".tile-notice");
+      if(notice)notice.style.display="block";
+    };
+    image.src=reliefHighRes;
+  }else{
+    image.src=GEO_LOCAL_RASTERS.imagery;
+  }
   layer.appendChild(image);
   parent.appendChild(layer);
   const wash=document.createElement("div");
@@ -1112,7 +1129,7 @@ function renderMap(){
   cite.className="terrain-attribution";
   cite.textContent=geoMapView.mode==="imagery"?
     "真实现代地表影像 · NASA Blue Marble · 城邑为考古或区域定位":
-    "现代地形晕渲 · Tom Patterson / Natural Earth · 非商周复原";
+    "真实现代高程晕渲 · Mapzen Terrarium / Tom Patterson 后备 · 非商周复原";
   map.appendChild(cite);
   const noticeEl=document.createElement("div");
   noticeEl.className="tile-notice";
