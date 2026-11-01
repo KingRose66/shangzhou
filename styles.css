@@ -467,3 +467,17 @@ dialog::backdrop{background:#0009}
 .map-city-finder select{min-height:35px;min-width:155px;max-width:220px;
   padding:5px 8px;background:#232921;color:#f3e6c7;border:1px solid #9b8460;border-radius:6px}
 @media(max-width:1100px){.map-city-finder{width:100%;justify-content:flex-end}.map-city-finder select{max-width:55vw}}
+
+/* v1.9 — larger, terrain-first tactical atlas without moving real city anchors */
+.map.geographic-map{height:82vh;min-height:740px;background:#56604c}
+.map.geographic-map .geographic-tiles.relief-tiles{filter:brightness(1.15) saturate(1.09) contrast(1.24)}
+.map.geographic-map .geographic-tiles.imagery-tiles{filter:brightness(1.12) saturate(1.08) contrast(1.16)}
+.map.geographic-map .geographic-wash{background:linear-gradient(180deg,rgba(16,20,16,.12),transparent 18%,transparent 82%,rgba(12,17,14,.16))}
+.map.geographic-map .geography-label{font-size:15px;font-weight:800;letter-spacing:2px;color:#fff7d8;text-shadow:0 2px 3px #111c13,0 0 8px #101b12}
+.map.geographic-map .geographic-route{stroke-width:1.8;stroke-dasharray:6 7}
+.map.geographic-map .node.geo-node.city-sprite{background:radial-gradient(ellipse at 49% 42%,rgba(42,39,28,.76),rgba(13,20,17,.60) 75%,rgba(10,16,12,.22))}
+.map-campaign-focus .layout{grid-template-columns:225px minmax(0,1fr) 265px}
+.map-campaign-focus .map.geographic-map{height:calc(100vh - 162px);min-height:720px}
+.map-campaign-focus .map-toolbar .legend{display:none}
+@media(max-width:1100px){.map.geographic-map{min-height:620px;height:74vh}.map-campaign-focus .layout{display:block}.map-campaign-focus .map.geographic-map{height:85vh;min-height:620px}.geo-map-controls{flex-wrap:wrap;max-width:240px}}
+@media(max-width:800px){.map.geographic-map{min-height:530px;height:68vh}.map-campaign-focus .map.geographic-map{min-height:530px;height:75vh}}
