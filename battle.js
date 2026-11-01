@@ -93,7 +93,12 @@
         zones.push({type:"forest",x:w*.66,y:h*.18,w:w*.18,h:h*.22});
       }
       if(kind === "river"){
-        zones.push({type:"mud",x:w*.46,y:0,w:w*.09,h:h});
+        // A continuous river is a defensible obstacle, not an invisible
+        // full-height mud strip. The central ford is slower but passable.
+        zones.push({type:"river",x:w*.46,y:0,w:w*.075,h:h});
+        zones.push({type:"ford",x:w*.46,y:h*.40,w:w*.075,h:h*.20});
+        zones.push({type:"mud",x:w*.40,y:h*.07,w:w*.055,h:h*.86});
+        zones.push({type:"mud",x:w*.54,y:h*.07,w:w*.055,h:h*.86});
       }
       if(siege){
         zones.push({type:"rampart",x:w*.67,y:h*.08,w:w*.045,h:h*.84,gateY:h*.50,gateHalf:58});
@@ -138,7 +143,7 @@
     }
 
     terrainAt(u){
-      for(const z of this.terrainZones){
+      for(const z of [...this.terrainZones].reverse()){
         if(u.x>=z.x && u.x<=z.x+z.w && u.y>=z.y && u.y<=z.y+z.h){
           if((z.type==="rampart"||z.type==="ditch") && Math.abs(u.y-z.gateY)<=z.gateHalf) continue;
           return z.type;
@@ -153,6 +158,8 @@
         if(t==="rampart") return .06;
         if(t==="ditch") return .08;
         if(t==="forest") return .28;
+        if(t==="river") return .10;
+        if(t==="ford") return .32;
         if(t==="mud") return .22;
         if(t==="hill") return .52;
         if(t==="field") return .82;
@@ -162,6 +169,8 @@
       if(u.type==="hunter" && (t==="forest"||t==="hill")) return .95;
       if(t==="hill") return .83;
       if(t==="forest") return .72;
+      if(t==="river") return .20;
+      if(t==="ford") return .55;
       if(t==="mud") return .68;
       return 1;
     }
@@ -286,7 +295,7 @@
           continue;
         }
 
-        const badChariotGround=["forest","mud","hill","rampart","ditch"].includes(this.terrainAt(u));
+        const badChariotGround=["forest","mud","river","ford","hill","rampart","ditch"].includes(this.terrainAt(u));
         if(u.type==="chariot"&&!badChariotGround&&!u.engaged&&!target.routed){
           const rearX=target.x-Math.cos(target.facing)*58;
           const rearY=target.y-Math.sin(target.facing)*58;
@@ -404,7 +413,7 @@
       const dirOrder=direction==="rear"?6:direction==="flank"?3:0;
       let charge=1;
 
-      const goodChariotGround=!["forest","mud","hill","rampart","ditch"].includes(this.terrainAt(a));
+      const goodChariotGround=!["forest","mud","river","ford","hill","rampart","ditch"].includes(this.terrainAt(a));
       const charged=(a.chargeMomentum===undefined?a.lastMoveSpeed>45:a.chargeMomentum>.12);
       if(a.type==="chariot" && charged && goodChariotGround){
         if(d.type==="bronze_spear" && direction==="front"){
@@ -549,6 +558,20 @@
           for(let i=0;i<18;i++){const x=z.x+(i*37%z.w),y=z.y+(i*61%z.h);c.beginPath();c.arc(x,y,9,0,Math.PI*2);c.fill()}
         } else if(z.type==="hill"){
           c.fillStyle="rgba(116,88,52,.45)";c.beginPath();c.ellipse(z.x+z.w/2,z.y+z.h/2,z.w/2,z.h/2,0,0,Math.PI*2);c.fill();
+        } else if(z.type==="river"){
+          c.fillStyle="rgba(45,103,123,.88)";
+          c.fillRect(z.x,z.y,z.w,z.h);
+          c.strokeStyle="rgba(163,206,208,.8)";c.lineWidth=3;
+          c.beginPath();c.moveTo(z.x+3,z.y);c.lineTo(z.x+3,z.y+z.h);
+          c.moveTo(z.x+z.w-3,z.y);c.lineTo(z.x+z.w-3,z.y+z.h);c.stroke();
+        } else if(z.type==="ford"){
+          c.fillStyle="rgba(161,151,103,.75)";c.fillRect(z.x,z.y,z.w,z.h);
+          c.strokeStyle="rgba(222,204,150,.85)";c.lineWidth=2;
+          for(let yy=z.y+12;yy<z.y+z.h;yy+=18){
+            c.beginPath();c.moveTo(z.x+4,yy);c.lineTo(z.x+z.w-4,yy);c.stroke();
+          }
+          c.fillStyle="#f6e7bd";c.font="bold 13px sans-serif";
+          c.fillText("渡口",z.x+4,z.y+18);
         } else if(z.type==="mud"){
           c.fillStyle="rgba(75,68,52,.58)";c.fillRect(z.x,z.y,z.w,z.h);
         } else if(z.type==="field"){
