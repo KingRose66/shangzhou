@@ -25,13 +25,16 @@ jobs:
         uses: actions/checkout@v4
       - name: Prepare bundled realistic terrain
         run: |
-          python3 -m pip install --user --quiet numpy Pillow basemap-data
+          python3 -m pip install --user --quiet numpy Pillow basemap-data pyshp
           python3 scripts/build-terrain.py
+          python3 scripts/build-elevation.py --self-test
+          python3 scripts/build-elevation.py || echo 'High-resolution elevation failed; bundled relief fallback remains enabled.'
           test -s assets/china-satellite.webp
           test -s assets/china-relief.webp
       - name: Commit reproducible geographic assets
         run: |
           git add assets/china-satellite.webp assets/china-relief.webp
+          if test -s assets/china-elevation.webp; then git add assets/china-elevation.webp assets/china-elevation-source.json; fi
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'assets: bundle NASA imagery and terrain relief [skip ci]'
             git push origin HEAD:main || echo 'Asset push skipped due to concurrent main change; Pages build still includes assets.'
