@@ -9,7 +9,7 @@ let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
 let pendingBattleReport = null;
-const geoMapView={lon:null,lat:null,zoomDelta:0,mode:'imagery',wheelMode:'pan'};
+const geoMapView={lon:null,lat:null,zoomDelta:.7,mode:'relief',wheelMode:'pan',expanded:false};
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
@@ -466,7 +466,8 @@ function freshState(player){
 }
 
 function startGame(player,options){
-  geoMapView.lon=null;geoMapView.lat=null;geoMapView.zoomDelta=0;
+  geoMapView.lon=null;geoMapView.lat=null;geoMapView.zoomDelta=.7;
+  geoMapView.mode='relief';
   state=freshState(player);
   pendingEncounter=null;pendingWorldEvent=null;pendingBattleReport=null;turnBusy=false;
   initializeCharacterLocations();
@@ -704,10 +705,15 @@ function geographicRoutes(map,m,selectedEdges,plannedEdges){
 function addGeographyLabels(map,m){
   [
     {name:"黄土高原",lon:108.4,lat:37.2},
-    {name:"关中盆地",lon:108.2,lat:33.9},
-    {name:"太行山地",lon:112.4,lat:38.3},
+    {name:"关中平原",lon:108.2,lat:34.15},
+    {name:"太行山",lon:113.4,lat:38.3},
+    {name:"吕梁山",lon:111.15,lat:37.5},
     {name:"华北平原",lon:115.7,lat:35.8},
+    {name:"黄河",lon:111.55,lat:35.35},
+    {name:"渭河",lon:106.7,lat:34.45},
+    {name:"汾河",lon:111.45,lat:36.35},
     {name:"秦岭",lon:108.8,lat:33.6},
+    {name:"嵩山",lon:112.9,lat:34.43},
     {name:"江汉平原",lon:113.7,lat:30.4},
     {name:"成都平原",lon:103.9,lat:30.25}
   ].forEach(function(p){
@@ -721,13 +727,24 @@ function createMapControls(map){
   const controls=document.createElement("div");
   controls.className="geo-map-controls";
   const controlsData=[
+    ["战区","聚焦当前选中的城邑与周边地形（可拖动探索）",function(){
+      const site=getSet(state.selectedSettlement);
+      if(site){geoMapView.lon=site.lon;geoMapView.lat=site.lat;}
+      geoMapView.zoomDelta=Math.max(1.25,geoMapView.zoomDelta);
+      renderMap();
+    }],
     ["+","放大",function(){geoMapView.zoomDelta=Math.min(2.6,geoMapView.zoomDelta+.45);renderMap();}],
     ["−","缩小",function(){geoMapView.zoomDelta=Math.max(-1.6,geoMapView.zoomDelta-.45);renderMap();}],
     ["全图","复位全部城邑",function(){
       geoMapView.zoomDelta=0;geoMapView.lon=null;geoMapView.lat=null;renderMap();
     }],
-    [geoMapView.mode==="imagery"?"地形":"卫星","切换真实地形与卫星影像",function(){
+    [geoMapView.mode==="imagery"?"地形":"卫星","切换地形晕渲与地表影像",function(){
       geoMapView.mode=geoMapView.mode==="imagery"?"relief":"imagery";renderMap();
+    }],
+    [geoMapView.expanded?"收起地图":"放大地图","展开/收起地图画布，不改变城邑位置及行军规则",function(){
+      geoMapView.expanded=!geoMapView.expanded;
+      document.body.classList.toggle("map-campaign-focus",geoMapView.expanded);
+      renderMap();
     }],
     [geoMapView.wheelMode==="pan"?"触控板":"鼠标滚轮",
       geoMapView.wheelMode==="pan"?"当前：双指滑动平移，双指捏合缩放；点击切换普通滚轮缩放":"当前：普通滚轮缩放；点击切换触控板双指平移",
@@ -1095,7 +1112,7 @@ function renderMap(){
   cite.className="terrain-attribution";
   cite.textContent=geoMapView.mode==="imagery"?
     "真实现代地表影像 · NASA Blue Marble · 城邑为考古或区域定位":
-    "真实地形晕渲 · Tom Patterson / Natural Earth · 非晚商历史复原";
+    "现代地形晕渲 · Mapzen / AWS高程（可用时）+ Tom Patterson · 非商周复原";
   map.appendChild(cite);
   const noticeEl=document.createElement("div");
   noticeEl.className="tile-notice";
