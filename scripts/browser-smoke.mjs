@@ -36,7 +36,10 @@ for (const factionId of playable) {
   window.document.querySelector('[data-faction-choice="'+factionId+'"]').click();
   if(window.SHANGZHOU_DEBUG.hasPendingWorldEvent())window.SHANGZHOU_DEBUG.resolveWorldEvent(0);
   assert(window.document.querySelector("#hud-faction").textContent.trim().length>0,"failed to start "+factionId);
-  assert(window.document.querySelectorAll(".node").length===window.GAME_DATA.settlements.length,"map node count mismatch for "+factionId);
+  const mapNodeCount=window.document.querySelectorAll(".node").length;
+  assert(mapNodeCount===window.GAME_DATA.settlements.length,
+    "map node count mismatch for "+factionId+": got "+mapNodeCount+", expected "+window.GAME_DATA.settlements.length+
+    "; runtime errors: "+runtimeErrors.join(" | "));
   const ownArmyCards=window.document.querySelectorAll(".army-card").length;
   assert(ownArmyCards>=1,"no starting army rendered for "+factionId);
   window.document.querySelector("#btn-new").click();
