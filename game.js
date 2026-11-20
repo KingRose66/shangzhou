@@ -270,7 +270,7 @@ function grainBand(s){
   return "粮储充裕";
 }
 function enemyArmyLabelAt(s){
-  const armies=state.armies.filter(function(a){return a.owner!==state.player&&a.at===s.id&&armyMen(a)>0;});
+  const armies=state.armies.filter(function(a){return a.owner!==state.player&&!a.fieldPosition&&a.at===s.id&&armyMen(a)>0;});
   if(!armies.length)return "未发现成建制军队";
   const men=armies.reduce(function(n,a){return n+armyMen(a);},0);
   const lvl=intelLevel(s);
@@ -693,9 +693,9 @@ function realTerrainTiles(parent,m){
 }
 
 function nodeBlocked(id,owner){
-  return state.armies.some(function(a){return isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
+  return state.armies.some(function(a){return !a.fieldPosition&&isHostile(owner,a.owner)&&a.at===id&&armyMen(a)>0;});
 }
-function geographicRoutes(map,m,selectedEdges,plannedEdges){
+function geographicRoutes(map,m,selectedEdges,plannedEdges,fieldEdges){
   const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
   svg.setAttribute("class","geographic-routes");
   svg.setAttribute("viewBox","0 0 "+m.w+" "+m.h);
@@ -713,7 +713,7 @@ function geographicRoutes(map,m,selectedEdges,plannedEdges){
       const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
       const mx=(a.x+b.x)/2-dy/dist*curve,my=(a.y+b.y)/2+dx/dist*curve;
       p.setAttribute("d","M "+a.x+" "+a.y+" Q "+mx+" "+my+" "+b.x+" "+b.y);
-      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":"")+(plannedEdges.has(k)?" planned-route":""));
+      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":"")+(plannedEdges.has(k)?" planned-route":"")+(fieldEdges&&fieldEdges.has(k)?" field-camp-route":""));
       svg.appendChild(p);
     });
   });
@@ -935,28 +935,61 @@ function setupGeographicInteraction(map,m){
 
 // Late-Shang-inspired settlement silhouettes, not literal reconstructions of
 // excavated city walls. The geographical coordinate remains at the icon center.
+const SETTLEMENT_VISUAL_TYPES=Object.fromEntries(DATA.settlements.map(s=>[s.id,s.mapType]));
+function settlementVisualType(s){
+  return s.mapType||SETTLEMENT_VISUAL_TYPES[s.id]||(s.capital?"capital":s.terrain==="river"?"ford":s.wall>0?"city":"village");
+}
+function settlementTypeName(type){
+  return ({capital:"都城",city:"城邑",ford:"渡口",pass:"关隘",fort:"边寨",village:"聚落"})[type]||"聚落";
+}
 function settlementGraphic(s){
-  const wall=s.wall>0,capital=!!s.capital,ferry=s.terrain==="river",hill=["hill","highland"].includes(s.terrain);
-  const roofs=capital
-    ? '<path d="M7 21 L26 10 L45 21 L42 24 L10 24 Z" class="shang-roof"/><path d="M15 18 L26 12 L37 18" class="shang-ridge"/>'
-    : ferry
-      ? '<path d="M11 23 L26 15 L41 23 L39 26 L13 26 Z" class="shang-roof"/><path d="M13 34 L39 34" class="shang-river"/>'
-      : hill
-        ? '<path d="M8 23 L18 16 L29 23 Z M25 23 L36 14 L46 23 Z" class="shang-roof"/>'
-        : '<path d="M7 23 L18 16 L29 23 Z M24 23 L35 15 L47 23 Z" class="shang-roof"/>';
-  const defenses=wall
-    ? '<path d="M7 28 H17 V38 H23 V32 H29 V38 H35 V28 H45 V44 H7 Z" class="shang-wall"/><path d="M21 44 V37 Q26 31 31 37 V44" class="shang-gate"/>'
-    : '<path d="M9 25 V40 H43 V25 M12 39 H40" class="shang-houses"/><path d="M17 39 V32 H23 V39 M32 39 V32 H38 V39" class="shang-posts"/>';
-  const palaces=capital?'<path d="M16 26 V35 H36 V26" class="shang-palace"/><path d="M25 26 V35" class="shang-ridge"/>':'';
-  const ferryDetail=ferry?'<path d="M4 43 Q17 38 29 43 Q42 47 50 42" class="shang-river"/>':'';
-  return '<svg class="settlement-art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" aria-hidden="true">'+
-    '<ellipse cx="26" cy="46" rx="20" ry="4" class="shang-shadow"/>'+
-    '<path d="M5 45 L10 41 H42 L47 45 L42 48 H10 Z" class="shang-terrace"/>'+
-    roofs+defenses+palaces+ferryDetail+'</svg>';
+  const type=settlementVisualType(s);
+  const base='<ellipse cx="26" cy="47" rx="21" ry="3.5" class="shang-shadow"/>'+
+    '<path d="M4 45 L9 41 H43 L48 45 L43 49 H9 Z" class="shang-terrace"/>';
+  let art="";
+  if(type==="capital"){
+    art='<path d="M5 25 L9 21 H43 L47 25 V44 H5 Z" class="shang-wall"/>'+
+      '<path d="M8 22 V17 H14 V22 H20 V17 H26 V22 H32 V17 H38 V22 H44" class="shang-battlement"/>'+
+      '<path d="M18 44 V36 Q26 27 34 36 V44 Z" class="shang-gate"/>'+
+      '<path d="M8 20 L26 8 L44 20 L40 23 H12 Z" class="shang-roof"/>'+
+      '<path d="M15 17 L26 10 L37 17" class="shang-ridge"/>'+
+      '<path d="M17 27 V34 H35 V27" class="shang-palace"/>'+
+      '<path d="M22 29 V34 M30 29 V34" class="shang-posts"/>';
+  }else if(type==="city"){
+    art='<path d="M6 27 H11 V22 H17 V27 H23 V22 H29 V27 H35 V22 H41 V27 H46 V44 H6 Z" class="shang-citywall"/>'+
+      '<path d="M19 44 V37 Q26 30 33 37 V44 Z" class="shang-gate"/>'+
+      '<path d="M10 25 L18 18 L26 25 Z M27 26 L35 19 L43 26 Z" class="shang-roof"/>'+
+      '<path d="M13 26 V34 H23 V26 M31 27 V35 H40 V27" class="shang-houses"/>';
+  }else if(type==="ford"){
+    art='<path d="M2 41 Q10 36 18 41 T34 41 T50 41" class="shang-water"/>'+
+      '<path d="M7 28 H45 L41 34 H11 Z" class="shang-bridge"/>'+
+      '<path d="M14 34 V42 M26 34 V43 M38 34 V42" class="shang-pier"/>'+
+      '<path d="M17 27 L26 19 L35 27 Z" class="shang-roof"/>'+
+      '<path d="M20 27 V33 H32 V27" class="shang-gate"/>'+
+      '<path d="M5 47 Q14 43 22 47 M30 47 Q39 43 48 47" class="shang-water"/>';
+  }else if(type==="pass"){
+    art='<path d="M2 41 L14 15 L23 32 L34 10 L50 41 Z" class="shang-mountain"/>'+
+      '<path d="M8 40 V31 H16 V40 M36 40 V29 H44 V40" class="shang-watchtower"/>'+
+      '<path d="M19 42 V30 Q26 21 33 30 V42 Z" class="shang-gate"/>'+
+      '<path d="M17 30 L26 23 L35 30 Z" class="shang-roof"/>'+
+      '<path d="M23 33 V41 M29 33 V41" class="shang-posts"/>';
+  }else if(type==="fort"){
+    art='<path d="M7 44 V25 L10 18 L13 25 L16 18 L19 25 L22 18 L25 25 L28 18 L31 25 L34 18 L37 25 L40 18 L43 25 V44" class="shang-palisade"/>'+
+      '<path d="M18 25 V15 H34 V25 Z" class="shang-watchtower"/>'+
+      '<path d="M16 44 V36 Q26 27 36 36 V44 Z" class="shang-gate"/>'+
+      '<path d="M15 15 L26 9 L37 15 Z" class="shang-roof"/>'+
+      '<path d="M26 15 V25" class="shang-ridge"/>';
+  }else{
+    art='<path d="M8 29 V41 H44 V29" class="shang-houses"/>'+
+      '<path d="M7 29 L17 20 L27 29 Z M25 30 L36 19 L47 30 Z" class="shang-roof"/>'+
+      '<path d="M13 41 V34 H20 V41 M32 41 V33 H39 V41" class="shang-posts"/>'+
+      '<path d="M6 43 H46" class="shang-palisade"/>';
+  }
+  return '<svg class="settlement-art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" aria-hidden="true">'+base+art+'</svg>';
 }
 function settlementMarkerSize(s){
-  // Minimum 50px target: even minor sites can be clicked on touch screens.
-  return s.capital?60:52;
+  const type=settlementVisualType(s);
+  return type==="capital"?64:(type==="city"||type==="pass"||type==="ford"||type==="fort"?56:52);
 }
 function renderMap(){
   const jump=$("#map-city-jump");
@@ -993,7 +1026,9 @@ function renderMap(){
     const planned=[supplyArmy.at].concat(supplyArmy.route||[]);
     for(let i=1;i<planned.length;i++)plannedEdges.add([planned[i-1],planned[i]].sort().join("-"));
   }
-  geographicRoutes(scene,m,selectedEdges,plannedEdges);
+  const fieldEdges=new Set();
+  state.armies.forEach(function(a){if(a.fieldPosition)fieldEdges.add(roadEdgeKey(a.fieldPosition.from,a.fieldPosition.to));});
+  geographicRoutes(scene,m,selectedEdges,plannedEdges,fieldEdges);
   addGeographyLabels(scene,m);
 
   const supplyNodes=new Set();
@@ -1052,7 +1087,8 @@ function renderMap(){
     const p=markerPositions.get(s.id);
     const size=settlementMarkerSize(s);
     if(!p||p.x<-40||p.x>m.w+40||p.y<-40||p.y>m.h+40)return;
-    const node=mapEl("button","node geo-node city-sprite "+s.owner+
+    const visualType=settlementVisualType(s);
+    const node=mapEl("button","node geo-node city-sprite city-type-"+visualType+" "+s.owner+
       (s.capital?" capital":"")+(s.wall>0?" walled":"")+
       (state.selectedSettlement===s.id?" selected":"")+
       (supplyNodes.has(s.id)?" supply":""),p.x,p.y);
@@ -1060,8 +1096,9 @@ function renderMap(){
     node.style.setProperty("--faction-color",faction(s.owner).color);
     node.style.setProperty("--marker-size",size+"px");
     node.dataset.settlementId=s.id;
-    node.setAttribute("aria-label","查看"+s.name);
-    node.title=s.name+" · "+ownerName(s.owner)+" · "+s.region+"（考古/复原位置 "+s.geographyConfidence+"）";
+    node.dataset.settlementType=visualType;
+    node.setAttribute("aria-label","查看"+s.name+"（"+settlementTypeName(visualType)+"）");
+    node.title=s.name+" · "+settlementTypeName(visualType)+" · "+ownerName(s.owner)+" · "+s.region+"（考古/复原位置 "+s.geographyConfidence+"）";
     node.innerHTML=settlementGraphic(s);
     node.onclick=function(e){e.stopPropagation();selectSettlement(s.id);};
     scene.appendChild(node);
@@ -1081,7 +1118,7 @@ function renderMap(){
       usedLabels.push(box);return true;
     });
     if(acceptable){
-      const label=mapEl("button","node-label geo-label geo-city-label"+
+      const label=mapEl("button","node-label geo-label geo-city-label type-"+visualType+
         (s.capital?" capital-label":"")+
         (state.selectedSettlement===s.id?" selected-label":""),acceptable.x,acceptable.y,s.name);
       label.type="button";
@@ -1111,12 +1148,13 @@ function renderMap(){
     if(armyMen(a)<=0)return;
     const s=getSet(a.at);if(!s)return;
     if(a.owner!==state.player&&intelLevel(s)<=0)return;
-    const p=markerPositions.get(s.id)||geoScreenPosition(s.lon,s.lat,m);
+    const p=a.fieldPosition?geoScreenPosition(a.fieldPosition.lon,a.fieldPosition.lat,m):
+      (markerPositions.get(s.id)||geoScreenPosition(s.lon,s.lat,m));
     const army=mapEl("button","army-token map-army "+(a.owner===state.player?"friendly":isHostile(state.player,a.owner)?"enemy":"foreign")+
-      (a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
+      (a.fieldPosition?" field-camp":"")+(a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
     const count=a.owner===state.player?fmt(armyMen(a)):intelLevel(s)>=3?fmt(armyMen(a)):intelLevel(s)===2?"约"+fmt(roughNumber(armyMen(a),100)):"？";
-    army.type="button";army.textContent="⚑ "+count;
-    army.title=a.name+" · "+s.name+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
+    army.type="button";army.textContent=(a.fieldPosition?"⛺ ":"⚑ ")+count;
+    army.title=a.name+" · "+(a.fieldPosition?("野外驻营："+getSet(a.fieldPosition.from).name+"—"+getSet(a.fieldPosition.to).name+" · 后勤锚点 "+s.name):s.name)+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
     army.onclick=function(e){
       e.stopPropagation();
       if(a.owner===state.player)selectArmy(a.id);
@@ -1172,9 +1210,63 @@ function accessibleMarchPath(a,targetId){
   }
   return null;
 }
+function roadFieldTerrain(a,b){
+  if(a.terrain==="river"||b.terrain==="river")return "river";
+  if(a.terrain==="highland"||b.terrain==="highland")return "highland";
+  if(a.terrain==="hill"||b.terrain==="hill")return "hill";
+  if(a.terrain==="rolling"||b.terrain==="rolling")return "rolling";
+  return "plain";
+}
+function roadEdgeKey(a,b){return [a,b].sort().join("|");}
+function findEnemyFieldCampOnRoad(mover,fromId,toId){
+  const edge=roadEdgeKey(fromId,toId);
+  return state.armies.find(function(x){
+    const p=x.fieldPosition;
+    return x.id!==mover.id&&p&&armyMen(x)>0&&isHostile(mover.owner,x.owner)&&
+      roadEdgeKey(p.from,p.to)===edge;
+  })||null;
+}
+function fieldBattleLocation(fromId,toId,camp){
+  const from=getSet(fromId),to=getSet(toId),site=Object.assign({},to);
+  site.name=from.name+"—"+to.name+"野外";
+  site.terrain=camp&&camp.terrain||roadFieldTerrain(from,to);
+  site.wall=0;site.field=true;
+  return site;
+}
+function deploySelectedArmyFieldCamp(){
+  const a=getArmy(state.selectedArmy),target=getSet(state.selectedSettlement);
+  if(turnBusy||state.gameOver||pendingEncounter||pendingWorldEvent||pendingBattleReport)return;
+  if(!a||a.owner!==state.player)return notice("请先选择一支我方军队。");
+  if(a.fieldPosition)return notice("军队已经在野外扎营，请先撤营。");
+  if(a.route&&a.route.length)return notice("请先取消连续行军路线，再选择野外扎营。");
+  const origin=getSet(a.at);
+  if(!target||target.id===origin.id||!origin.roads.includes(target.id))
+    return notice("请在地图上选择与军队当前位置直接相连的城邑，才能在该路段扎营。");
+  if(nodeBlocked(target.id,a.owner))return notice("该路段终点有敌军控制，暂时无法安全扎营。");
+  if(findEnemyFieldCampOnRoad(a,origin.id,target.id))return notice("该道路已有敌军野营部队，不宜贸然扎营。");
+  const need=requiredLaborers(a);
+  if(a.laborers<need)return notice("野外扎营需要至少 "+need+" 名民夫，当前只有 "+a.laborers+" 人。");
+  const cost=marchCost(a,target),grain=Math.ceil(cost.grain*.45),fodder=Math.ceil(cost.fodder*.45);
+  if(a.grain<grain)return notice("随军粮不足，野外扎营需要约 "+grain+" 石。");
+  if(a.fodder<fodder)return notice("草料不足，野外扎营需要约 "+fodder+" 草料。");
+  a.grain-=grain;a.fodder=Math.max(0,a.fodder-fodder);
+  a.fieldPosition={from:origin.id,to:target.id,lon:(origin.lon+target.lon)/2,
+    lat:(origin.lat+target.lat)/2,terrain:roadFieldTerrain(origin,target)};
+  addLog(a.name+"离开"+origin.name+"，在通往"+target.name+"的道路中段扎营。消耗部分行军粮草；后勤仍依托"+origin.name+"。","good");
+  render();
+}
+function withdrawSelectedArmyFieldCamp(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player||!a.fieldPosition)return;
+  const camp=a.fieldPosition;
+  a.fieldPosition=null;
+  addLog(a.name+"撤出"+getSet(camp.from).name+"—"+getSet(camp.to).name+"野营地，返回"+getSet(a.at).name+"的后勤锚点。");
+  render();
+}
 function planSelectedArmyRoute(){
   const a=getArmy(state.selectedArmy),target=getSet(state.selectedSettlement);
   if(!a||a.owner!==state.player||!target)return notice("请先选中我军与目的地。");
+  if(a.fieldPosition)return notice("军队正在野外扎营，请先撤营再下达行军命令。");
   if(a.at===target.id)return notice("军队已经到达该聚落。");
   const route=accessibleMarchPath(a,target.id);
   if(!route)return notice("不存在连续的己方或获准通行道路；请先攻取敌方阻隔节点或争取通行。");
@@ -1191,15 +1283,15 @@ function cancelSelectedArmyRoute(){
   render();
 }
 function advancePlannedArmies(){
+  let encounterTriggered=false;
   state.armies.filter(a=>a.owner===state.player&&a.route&&a.route.length&&armyMen(a)>0).forEach(function(a){
+    if(encounterTriggered)return;
     const legs=a.stance==="forced"?2:1;
     for(let step=0;step<legs&&a.route.length;step++){
       const next=getSet(a.route[0]),current=getSet(a.at);
       if(!next||!current.roads.includes(next.id)||nodeBlocked(next.id,a.owner)||
         !(next.owner===a.owner||hasMilitaryAccess(a.owner,next.owner))){
-        a.route=[];
-        addLog(a.name+"路线被敌军或外交变化阻断，停止行军。","warning");
-        break;
+        a.route=[];addLog(a.name+"路线被敌军或外交变化阻断，停止行军。","warning");break;
       }
       if(a.laborers<requiredLaborers(a)){
         addLog(a.name+"民夫不足，连续行军暂停；可在我方城市补足。","warning");break;
@@ -1208,9 +1300,17 @@ function advancePlannedArmies(){
       if(a.grain<cost.grain||a.fodder<cost.fodder){
         addLog(a.name+"粮草不足，停于"+current.name+"。请从驻地粮仓补给。","warning");break;
       }
+      const fieldEnemy=findEnemyFieldCampOnRoad(a,current.id,next.id);
       a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);
       a.previous=a.at;a.at=next.id;a.route.shift();
       if(a.stance==="forced")a.morale=Math.max(24,a.morale-2);
+      if(fieldEnemy){
+        const camp=fieldEnemy.fieldPosition;
+        fieldEnemy.fieldPosition=null;a.route=[];refreshAllSupply();
+        addLog(a.name+"在"+current.name+"—"+next.name+"道路上遭遇敌军野营部队。","warning");
+        beginEncounter(a,fieldEnemy,current.id,null,fieldBattleLocation(current.id,next.id,camp));
+        encounterTriggered=true;break;
+      }
       addLog(a.name+"按预定路线抵达"+next.name+(a.route.length?"，后续目标 "+getSet(a.route[0]).name:"，计划行军完成")+".");
       refreshAllSupply();
     }
@@ -1220,6 +1320,7 @@ function marchSelectedArmy(){
   const a=getArmy(state.selectedArmy);
   const target=getSet(state.selectedSettlement);
   if(!a||a.owner!==state.player)return notice("请先选择一支我方军队。");
+  if(a.fieldPosition)return notice("军队正在野外扎营，请先撤营再行军。");
   if(!target||target.id===a.at)return notice("请先选择一个相邻目的地。");
   const at=getSet(a.at);
   if(!at.roads.includes(target.id))return notice("该聚落不与军队当前位置直接相邻。需要逐节点行军。");
@@ -1377,7 +1478,7 @@ function renderArmies(){
     const c=getChar(a.commander);
     const need=requiredLaborers(a);
     return '<div class="army-card '+(state.selectedArmy===a.id?"selected-card":"")+'">'+
-      '<b>'+a.name+'</b><span class="badge">'+getSet(a.at).name+'</span>'+
+      '<b>'+a.name+'</b><span class="badge">'+(a.fieldPosition?("野营·"+getSet(a.fieldPosition.from).name+"—"+getSet(a.fieldPosition.to).name):getSet(a.at).name)+'</span>'+
       '<div>兵力 '+fmt(armyMen(a))+' · 将领 '+(c?c.name:"未任命")+' · 士气 '+Math.round(a.morale)+'</div>'+
       '<div class="small '+(a.supplyState==="畅通"?"good":a.supplyState==="危险"?"warning":"bad")+'">粮道 '+a.supplyState+' · 民夫 '+a.laborers+'/'+need+' · 随军粮 '+Math.round(a.grain)+' 石</div>'+
       '<div class="small muted">军令：'+armyStance(a).name+(a.route&&a.route.length?' · 目的地 '+getSet(a.route[a.route.length-1]).name:'')+'</div>'+
@@ -1415,6 +1516,11 @@ function renderArmyDetail(){
   const quarterlyUse=Math.max(1,armyMen(a)*.022+a.laborers*.009);
   const endurance=a.grain/quarterlyUse;
   const siege=state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id?state.sieges[a.at]:null;
+  const campTarget=getSet(state.selectedSettlement);
+  const canCamp=!a.fieldPosition&&!(a.route&&a.route.length)&&campTarget&&campTarget.id!==a.at&&getSet(a.at).roads.includes(campTarget.id);
+  const fieldCampHtml=a.fieldPosition
+    ? '<div class="field-camp-status">野外驻营：'+getSet(a.fieldPosition.from).name+'—'+getSet(a.fieldPosition.to).name+' · 后勤锚点：'+getSet(a.at).name+'</div><button id="btn-withdraw-field-camp" class="tiny">撤营返回后勤锚点</button>'
+    : '<button id="btn-field-camp" class="tiny" '+(!canCamp?'disabled':'')+'>在所选道路中段扎营</button>';
   $("#army-detail").innerHTML=
     '<div class="stats">'+
       '<span>兵力</span><b>'+fmt(armyMen(a))+'</b>'+
@@ -1430,6 +1536,7 @@ function renderArmyDetail(){
       }).join("")+'</select></div>'+
     '<p class="small muted">'+armyStance(a).description+'</p>'+
     (a.route&&a.route.length?'<div class="small army-route-preview">预定路线：'+[a.at].concat(a.route).map(id=>getSet(id).name).join(" → ")+'</div>':'')+
+    fieldCampHtml+
     '<div class="army-orders"><label>统军将领</label><select id="commander-select">'+options+'</select></div>'+
     '<div class="unit-list">'+rows+'</div>'+
     '<p class="small">仅按随军粮估算可维持约 <b>'+endurance.toFixed(1)+' 季</b>（粮道补给未计入）。</p>'+
@@ -1437,10 +1544,13 @@ function renderArmyDetail(){
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
   $("#army-stance").onchange=function(){setArmyStance(a.id,this.value);};
+  const campButton=$("#btn-field-camp"),withdrawButton=$("#btn-withdraw-field-camp");
+  if(campButton)campButton.onclick=deploySelectedArmyFieldCamp;
+  if(withdrawButton)withdrawButton.onclick=withdrawSelectedArmyFieldCamp;
   const marchTarget=getSet(state.selectedSettlement);
-  const canMarch=!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
+  const canMarch=!a.fieldPosition&&!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
   $("#btn-march").disabled=!canMarch;
-  $("#btn-plan-march").disabled=!(marchTarget&&marchTarget.id!==a.at&&
+  $("#btn-plan-march").disabled=!!a.fieldPosition||!(marchTarget&&marchTarget.id!==a.at&&
     accessibleMarchPath(a,marchTarget.id));
   $("#btn-cancel-march").disabled=!(a.route&&a.route.length);
   $("#btn-march").textContent=canMarch?"行军至 "+marchTarget.name:"行军至选中聚落";
@@ -1831,6 +1941,7 @@ function assaultCurrentSiege(){
 
 function moveArmy(a,targetId,after){
   if(turnBusy||state.gameOver)return;
+  if(a.fieldPosition)return notice("军队正在野外扎营，请先撤营再行军。");
   const origin=getSet(a.at),dest=getSet(targetId);
   if(!origin.roads.includes(targetId))return notice("只能沿相邻道路或通道行军。");
   const need=requiredLaborers(a);
@@ -1843,10 +1954,17 @@ function moveArmy(a,targetId,after){
     declareWar(a.owner,dest.owner,true);
   }
 
+  const fieldEnemy=findEnemyFieldCampOnRoad(a,origin.id,targetId);
   a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);
   a.previous=origin.id;a.at=targetId;
   addLog(a.name+"由"+origin.name+"行军至"+dest.name+"，消耗军粮 "+Math.round(cost.grain)+" 石。");
   refreshAllSupply();
+  if(fieldEnemy){
+    const camp=fieldEnemy.fieldPosition;
+    addLog(a.name+"在"+origin.name+"—"+dest.name+"道路上遭遇敌军野营部队。","warning");
+    beginEncounter(a,fieldEnemy,origin.id,after,fieldBattleLocation(origin.id,targetId,camp));
+    return;
+  }
 
   const enemies=state.armies.filter(function(x){return isHostile(a.owner,x.owner)&&x.at===targetId&&armyMen(x)>0;});
   if(enemies.length){
@@ -1926,21 +2044,23 @@ function retreatNodeStrict(army,avoid){
     return n&&n.id!==avoid&&n.owner===army.owner&&!nodeBlocked(n.id,army.owner);
   })||null;
 }
-function beginEncounter(attacker,defender,attackerFrom,after){
+function beginEncounter(attacker,defender,attackerFrom,after,battleLocation){
   const playerArmy=attacker.owner===state.player?attacker:defender;
   const enemyArmy=playerArmy===attacker?defender:attacker;
-  const location=getSet(attacker.at);
+  const location=battleLocation||getSet(attacker.at);
+  const fieldBattle=!!(battleLocation&&battleLocation.field);
   const pc=getChar(playerArmy.commander),ec=getChar(enemyArmy.commander);
-  const siegeMode=!!(defender.temporaryGarrison&&state.sieges[location.id]);
+  const siegeMode=!fieldBattle&&!!(defender.temporaryGarrison&&state.sieges[location.id]);
+  attacker.fieldPosition=null;defender.fieldPosition=null;
   turnBusy=true;
   pendingEncounter={attacker:attacker,defender:defender,playerArmy:playerArmy,enemyArmy:enemyArmy,
-    attackerFrom:attackerFrom,after:after,location:location,pc:pc,ec:ec,siegeMode:siegeMode};
+    attackerFrom:attackerFrom,after:after,location:location,fieldBattle:fieldBattle,pc:pc,ec:ec,siegeMode:siegeMode};
 
   const playerIsAttacker=playerArmy===attacker;
   const retreatNode=playerIsAttacker?getSet(attackerFrom):retreatNodeStrict(playerArmy,attacker.at);
   pendingEncounter.retreatNode=retreatNode;
 
-  $("#encounter-title").textContent=(siegeMode?"强攻 ":"遭遇 ")+location.name;
+  $("#encounter-title").textContent=(siegeMode?"强攻 ":fieldBattle?"野外遭遇 ":"遭遇 ")+location.name;
   $("#encounter-summary").innerHTML=
     '<div class="encounter-grid">'+encounterArmyHtml(playerArmy,"player")+
     '<div class="encounter-vs">VS</div>'+encounterArmyHtml(enemyArmy,"enemy")+'</div>'+
@@ -1963,7 +2083,7 @@ function commandPendingEncounter(){
     siege:p.siegeMode,
     commanders:{[p.playerArmy.id]:p.pc,[p.enemyArmy.id]:p.ec},
     onFinish:function(result){
-      resolveTacticalResult(result,p.attacker,p.defender,p.playerArmy,p.enemyArmy,p.attackerFrom,p.after);
+      resolveTacticalResult(result,p.attacker,p.defender,p.playerArmy,p.enemyArmy,p.attackerFrom,p.after,p.location);
     }
   });
 }
@@ -2012,7 +2132,7 @@ function autoPendingEncounter(){
   if(!p)return;
   $("#encounter-overlay").classList.remove("show");
   pendingEncounter=null;
-  const r=autoResolve(p.attacker,p.defender,p.attackerFrom);
+  const r=autoResolve(p.attacker,p.defender,p.attackerFrom,p.location);
   refreshAllSupply();
   checkVictory();
   render();
@@ -2037,7 +2157,7 @@ function retreatPendingEncounter(){
   a.at=p.retreatNode.id;a.previous=p.retreatNode.id;
   addLog(a.name+"主动脱离接触，退往"+p.retreatNode.name+"；撤退中有少量失散。","warning");
 
-  if(a===p.defender){
+  if(a===p.defender&&!p.fieldBattle){
     const city=p.location;
     if(city.owner!==p.attacker.owner&&isAtWar(p.attacker.owner,city.owner)){
       if(city.wall>0)beginSiege(p.attacker,city);
@@ -2102,15 +2222,15 @@ function findRetreatNode(army,avoid){
   const candidates=s.roads.map(getSet).filter(function(n){return n.id!==avoid&&n.owner===army.owner&&!nodeBlocked(n.id,army.owner);});
   return candidates[0]||getSet(army.previous||s.id);
 }
-function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,attackerFrom,after){
-  const playerStart=armyMen(playerArmy),enemyStart=armyMen(enemyArmy),locationName=getSet(attacker.at).name;
+function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,attackerFrom,after,battleLocation){
+  const playerStart=armyMen(playerArmy),enemyStart=armyMen(enemyArmy),locationName=(battleLocation||getSet(attacker.at)).name;
   syncFromBattle(playerArmy,result.player);
   syncFromBattle(enemyArmy,result.enemy);
   const winner=result.winnerSide==="player"?playerArmy:enemyArmy;
   const loser=winner===playerArmy?enemyArmy:playerArmy;
   pursuitLoss(loser,winner);
 
-  addLog(winner.name+"在"+getSet(attacker.at).name+"取得战场优势；"+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
+  addLog(winner.name+"在"+locationName+"取得战场优势；"+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
 
   if(loser.temporaryGarrison){
     addLog(loser.name+"守备体系瓦解，幸存者逃散、被俘或退回民间。","bad");
@@ -2138,10 +2258,11 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
   },after);
 }
 
-function autoResolve(attacker,defender,attackerFrom){
-  const s=getSet(attacker.at),attackerStart=armyMen(attacker),defenderStart=armyMen(defender);
+function autoResolve(attacker,defender,attackerFrom,battleLocation){
+  const s=battleLocation||getSet(attacker.at),target=getSet(attacker.at);
+  const attackerStart=armyMen(attacker),defenderStart=armyMen(defender);
   const pa=armyPower(attacker,s,true)*(.9+Math.random()*.2);
-  const fort=s.wall?1+s.wall*.08+(hasTech(defender.owner,"fortification")?.15:0):1;
+  const fort=!s.field&&s.wall?1+s.wall*.08+(hasTech(defender.owner,"fortification")?.15:0):1;
   const pd=armyPower(defender,s,false)*(.9+Math.random()*.2)*fort;
   const winner=pa>=pd?attacker:defender,loser=winner===attacker?defender:attacker;
   const ratio=Math.max(pa,pd)/Math.max(1,Math.min(pa,pd));
@@ -2157,7 +2278,7 @@ function autoResolve(attacker,defender,attackerFrom){
   }else{
     const ret=findRetreatNode(loser,winner.at);if(ret)loser.at=ret.id;
   }
-  if(winner===attacker&&s.owner!==attacker.owner&&isAtWar(attacker.owner,s.owner))occupySettlement(attacker,s);
+  if(winner===attacker&&target.owner!==attacker.owner&&isAtWar(attacker.owner,target.owner))occupySettlement(attacker,target);
   if(loser===attacker&&getArmy(attacker.id)){attacker.at=attackerFrom;attacker.previous=attackerFrom;}
   return {winner:winner,location:s.name,attackerStart:attackerStart,defenderStart:defenderStart,attackerEnd:armyMen(attacker),defenderEnd:armyMen(defender)};
 }
@@ -2564,7 +2685,7 @@ function processTribute(){
 }
 
 function endTurn(){
-  if(turnBusy||state.gameOver||pendingWorldEvent||pendingBattleReport)return;
+  if(turnBusy||state.gameOver||pendingWorldEvent||pendingBattleReport||pendingEncounter)return;
   turnBusy=true;
   processTraining();
   aiAssignGovernors();
@@ -2592,8 +2713,9 @@ function endTurn(){
     refreshAllSupply();
     minorRandomEvent();
     checkVictory();
-    turnBusy=false;
+    turnBusy=!!pendingEncounter;
     render();
+    if(pendingEncounter)return;
     const evt=maybeWorldEvent();
     if(evt)showWorldEvent(evt);
   });

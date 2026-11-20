@@ -1,5 +1,5 @@
 const GAME_DATA = {
-  version: "1.8.0",
+  version: "1.10.0",
   title: "大邑商：四土",
   seasons: ["春","夏","秋","冬"],
   factions: {
@@ -55,7 +55,7 @@ const GAME_DATA = {
 
   settlements: [
     {
-      id:"yin", name:"大邑商·殷", owner:"shang", x:76,y:46, capital:true,
+      id:"yin",mapType:"capital", name:"大邑商·殷", owner:"shang", x:76,y:46, capital:true,
       terrain:"plain", region:"洹河平原", confidence:"A",
       pop:{clan:42500,slave:18400}, grain:18600,fodder:7200,bronze:1480,
       weapons:{wood:2600,bow:640,ge:930,spear:520,chariot:46},
@@ -63,128 +63,128 @@ const GAME_DATA = {
       roads:["taihang","jinnan","nan","daxinzhuang"]
     },
     {
-      id:"taihang",name:"太行东麓邑",owner:"shang",x:66,y:35,
+      id:"taihang",mapType:"fort",name:"太行东麓邑",owner:"shang",x:66,y:35,
       terrain:"hill",region:"太行山前",confidence:"C",
       pop:{clan:6900,slave:2100},grain:4600,fodder:1750,bronze:270,
       weapons:{wood:700,bow:160,ge:150,spear:90,chariot:8},
       farm:61,forge:1,market:1,wall:1,roads:["yin","jinnan","north"]
     },
     {
-      id:"nan",name:"王畿南邑",owner:"shang",x:81,y:64,
+      id:"nan",mapType:"village",name:"王畿南邑",owner:"shang",x:81,y:64,
       terrain:"plain",region:"豫北",confidence:"C",
       pop:{clan:9200,slave:3600},grain:6900,fodder:1900,bronze:220,
       weapons:{wood:1100,bow:120,ge:110,spear:70,chariot:4},
       farm:82,forge:1,market:1,wall:0,roads:["yin","nanyang"]
     },
     {
-      id:"jinnan",name:"晋南商系据点",owner:"shang",x:56,y:48,
+      id:"jinnan",mapType:"fort",name:"晋南商系据点",owner:"shang",x:56,y:48,
       terrain:"rolling",region:"晋南",confidence:"B",
       pop:{clan:5400,slave:1700},grain:4100,fodder:1800,bronze:190,
       weapons:{wood:650,bow:130,ge:105,spear:55,chariot:5},
       farm:60,forge:1,market:1,wall:1,roads:["yin","taihang","crossing","gaodi"]
     },
     {
-      id:"crossing",name:"黄河渡口邑",owner:"neutral",x:45,y:52,
+      id:"crossing",mapType:"ford",name:"黄河渡口邑",owner:"neutral",x:45,y:52,
       terrain:"river",region:"晋陕峡谷",confidence:"C",
       pop:{clan:3200,slave:850},grain:2500,fodder:1200,bronze:80,
       weapons:{wood:400,bow:80,ge:40,spear:25,chariot:1},
       farm:52,forge:0,market:2,wall:0,roads:["jinnan","zhouyuan","gaodi"]
     },
     {
-      id:"gaodi",name:"寨沟高地中心",owner:"gaodi",x:43,y:29,capital:true,
+      id:"gaodi",mapType:"capital",name:"寨沟高地中心",owner:"gaodi",x:43,y:29,capital:true,
       terrain:"highland",region:"陕北清涧",confidence:"A",
       pop:{clan:7600,slave:1800},grain:3500,fodder:3700,bronze:260,
       weapons:{wood:1000,bow:230,ge:120,spear:65,chariot:7},
       farm:43,forge:1,market:1,wall:1,roads:["jinnan","crossing","zhouyuan","lijia"]
     },
     {
-      id:"zhouyuan",name:"周原",owner:"zhou",x:29,y:58,capital:true,
+      id:"zhouyuan",mapType:"capital",name:"周原",owner:"zhou",x:29,y:58,capital:true,
       terrain:"plain",region:"岐山—扶风",confidence:"A",
       pop:{clan:17200,slave:5300},grain:10400,fodder:3900,bronze:510,
       weapons:{wood:1800,bow:320,ge:230,spear:160,chariot:13},
       farm:86,forge:2,market:2,wall:1,roads:["crossing","gaodi","weis","west","laoniupo"]
     },
     {
-      id:"weis",name:"渭水东部邑",owner:"zhou",x:38,y:70,
+      id:"weis",mapType:"village",name:"渭水东部邑",owner:"zhou",x:38,y:70,
       terrain:"plain",region:"关中东部",confidence:"C",
       pop:{clan:7800,slave:2100},grain:6200,fodder:2100,bronze:140,
       weapons:{wood:880,bow:120,ge:80,spear:55,chariot:3},
       farm:90,forge:0,market:1,wall:0,roads:["zhouyuan","laoniupo"]
     },
     {
-      id:"west",name:"西部诸邑",owner:"neutral",x:17,y:48,
+      id:"west",mapType:"village",name:"西部诸邑",owner:"neutral",x:17,y:48,
       terrain:"rolling",region:"渭河上游",confidence:"C",
       pop:{clan:4100,slave:800},grain:2700,fodder:2600,bronze:90,
       weapons:{wood:520,bow:110,ge:35,spear:25,chariot:2},
       farm:48,forge:0,market:1,wall:0,roads:["zhouyuan"]
     },
-    {id:"lijia",name:"李家崖诸聚落",owner:"gaodi",x:39,y:16,
+    {id:"lijia",mapType:"fort",name:"李家崖诸聚落",owner:"gaodi",x:39,y:16,
       terrain:"highland",region:"晋陕高地",confidence:"A",
       pop:{clan:4300,slave:900},grain:2200,fodder:3100,bronze:170,
       weapons:{wood:620,bow:130,ge:65,spear:40,chariot:3},
       farm:36,forge:1,market:1,wall:1,roads:["gaodi","north"]
     },
-    {id:"north",name:"北方贸易口",owner:"neutral",x:58,y:8,
+    {id:"north",mapType:"pass",name:"北方贸易口",owner:"neutral",x:58,y:8,
       terrain:"highland",region:"北方边缘",confidence:"C",
       pop:{clan:2400,slave:420},grain:1300,fodder:2800,bronze:55,
       weapons:{wood:330,bow:90,ge:20,spear:18,chariot:1},
       farm:28,forge:0,market:2,wall:0,roads:["lijia","taihang"]
     },
-    {id:"laoniupo",name:"老牛坡商文化据点",owner:"shang",x:41,y:70,
+    {id:"laoniupo",mapType:"city",name:"老牛坡商文化据点",owner:"shang",x:41,y:70,
       terrain:"plain",region:"关中东部",confidence:"B",
       pop:{clan:4600,slave:1300},grain:3300,fodder:1500,bronze:160,
       weapons:{wood:560,bow:90,ge:90,spear:55,chariot:4},
       farm:69,forge:1,market:1,wall:1,roads:["zhouyuan","weis","hanzhong"]
     },
-    {id:"daxinzhuang",name:"大辛庄",owner:"shang",x:90,y:40,
+    {id:"daxinzhuang",mapType:"city",name:"大辛庄",owner:"shang",x:90,y:40,
       terrain:"plain",region:"济南地区",confidence:"A",
       pop:{clan:9800,slave:3100},grain:6900,fodder:1900,bronze:250,
       weapons:{wood:980,bow:180,ge:150,spear:95,chariot:7},
       farm:79,forge:1,market:2,wall:1,roads:["yin","qianzhangda"]
     },
-    {id:"qianzhangda",name:"前掌大",owner:"dongfang",x:92,y:57,capital:true,
+    {id:"qianzhangda",mapType:"capital",name:"前掌大",owner:"dongfang",x:92,y:57,capital:true,
       terrain:"plain",region:"鲁南",confidence:"A",
       pop:{clan:11200,slave:3200},grain:7200,fodder:2400,bronze:330,
       weapons:{wood:1200,bow:210,ge:180,spear:105,chariot:9},
       farm:76,forge:1,market:2,wall:1,roads:["daxinzhuang","haidai","huaibei"]
     },
-    {id:"haidai",name:"海岱东部诸邑",owner:"dongfang",x:97,y:44,
+    {id:"haidai",mapType:"village",name:"海岱东部诸邑",owner:"dongfang",x:97,y:44,
       terrain:"plain",region:"山东东部",confidence:"C",
       pop:{clan:5600,slave:1100},grain:4300,fodder:1600,bronze:100,
       weapons:{wood:650,bow:120,ge:55,spear:35,chariot:2},
       farm:72,forge:0,market:2,wall:0,roads:["qianzhangda"]
     },
-    {id:"huaibei",name:"淮北交通邑",owner:"neutral",x:85,y:71,
+    {id:"huaibei",mapType:"ford",name:"淮北交通邑",owner:"neutral",x:85,y:71,
       terrain:"river",region:"淮北",confidence:"C",
       pop:{clan:5100,slave:1000},grain:3900,fodder:1400,bronze:80,
       weapons:{wood:610,bow:130,ge:45,spear:30,chariot:1},
       farm:77,forge:0,market:2,wall:0,roads:["qianzhangda","nanyang"]
     },
-    {id:"nanyang",name:"江汉北部门户",owner:"neutral",x:71,y:75,
+    {id:"nanyang",mapType:"pass",name:"江汉北部门户",owner:"neutral",x:71,y:75,
       terrain:"rolling",region:"南阳—襄阳通道",confidence:"C",
       pop:{clan:6500,slave:1400},grain:4700,fodder:1700,bronze:120,
       weapons:{wood:760,bow:160,ge:65,spear:40,chariot:2},
       farm:73,forge:0,market:2,wall:1,roads:["nan","huaibei","jianghan","hanzhong"]
     },
-    {id:"jianghan",name:"江汉中心邑",owner:"jianghan",x:70,y:85,capital:true,
+    {id:"jianghan",mapType:"capital",name:"江汉中心邑",owner:"jianghan",x:70,y:85,capital:true,
       terrain:"river",region:"江汉平原",confidence:"C",
       pop:{clan:10500,slave:2500},grain:7900,fodder:2200,bronze:260,
       weapons:{wood:1200,bow:260,ge:125,spear:85,chariot:3},
       farm:84,forge:1,market:2,wall:1,roads:["nanyang","wucheng"]
     },
-    {id:"wucheng",name:"吴城",owner:"wucheng",x:82,y:92,capital:true,
+    {id:"wucheng",mapType:"capital",name:"吴城",owner:"wucheng",x:82,y:92,capital:true,
       terrain:"rolling",region:"赣江流域",confidence:"A",
       pop:{clan:9200,slave:2100},grain:6200,fodder:1700,bronze:430,
       weapons:{wood:980,bow:170,ge:190,spear:125,chariot:2},
       farm:69,forge:2,market:2,wall:1,roads:["jianghan"]
     },
-    {id:"hanzhong",name:"汉中交换节点",owner:"neutral",x:45,y:84,
+    {id:"hanzhong",mapType:"pass",name:"汉中交换节点",owner:"neutral",x:45,y:84,
       terrain:"hill",region:"汉中盆地",confidence:"C",
       pop:{clan:4800,slave:900},grain:3400,fodder:1800,bronze:95,
       weapons:{wood:570,bow:125,ge:45,spear:35,chariot:1},
       farm:63,forge:0,market:2,wall:1,roads:["nanyang","laoniupo","shu"]
     },
-    {id:"shu",name:"成都平原古蜀中心",owner:"shu",x:23,y:91,capital:true,
+    {id:"shu",mapType:"capital",name:"成都平原古蜀中心",owner:"shu",x:23,y:91,capital:true,
       terrain:"plain",region:"成都平原",confidence:"B",
       pop:{clan:15800,slave:3600},grain:10600,fodder:3000,bronze:620,
       weapons:{wood:1500,bow:290,ge:240,spear:170,chariot:2},

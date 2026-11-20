@@ -85,12 +85,14 @@ def elevation_mosaic():
     return np.asarray(image.resize((WIDTH, HEIGHT), Image.Resampling.BILINEAR, box=frame), dtype=np.float32)
 
 def shaded_relief(height):
-    levels = [-500, 0, 80, 200, 430, 800, 1300, 1900, 2600, 3500, 6000]
+    # Blue is reserved for below-sea-level cells. Most low plains are 0–80m.
+    levels = [-500, -80, -5, 0, 25, 60, 120, 250, 500, 900, 1500, 2500, 4000, 6000]
     palette = [
-        (30, 81, 104), (51, 111, 133), (112, 145, 112),
-        (151, 159, 109), (166, 157, 105), (140, 135, 93),
-        (136, 125, 91), (133, 116, 96), (145, 137, 123),
-        (193, 190, 179), (230, 228, 218)
+        (30, 72, 94), (48, 91, 111), (91, 125, 132),
+        (151, 164, 139), (183, 181, 138), (187, 177, 127),
+        (179, 165, 117), (166, 150, 109), (151, 137, 102),
+        (140, 129, 103), (140, 132, 115), (161, 155, 142),
+        (198, 194, 185), (235, 232, 225)
     ]
     color = np.stack([
         np.interp(height, levels, [row[channel] for row in palette])
@@ -168,7 +170,19 @@ def self_test():
     assert np.max(np.abs(decode_terrarium(Image.fromarray(sample)) - 0)) < .01
     sample[:, :, 1] = 100
     assert np.max(np.abs(decode_terrarium(Image.fromarray(sample)) - 100)) < .01
-    print("Terrarium decoder and map projections: OK")
+    levels = [-500, -80, -5, 0, 25, 60, 120, 250, 500, 900, 1500, 2500, 4000, 6000]
+    palette = [
+        (30, 72, 94), (48, 91, 111), (91, 125, 132),
+        (151, 164, 139), (183, 181, 138), (187, 177, 127),
+        (179, 165, 117), (166, 150, 109), (151, 137, 102),
+        (140, 129, 103), (140, 132, 115), (161, 155, 142),
+        (198, 194, 185), (235, 232, 225)
+    ]
+    lowland = tuple(np.interp(20, levels, [row[c] for row in palette]) for c in range(3))
+    sea = tuple(np.interp(-100, levels, [row[c] for row in palette]) for c in range(3))
+    assert lowland[0] > lowland[2] and lowland[1] > lowland[2], "Lowland palette must be land-colored"
+    assert sea[2] > sea[1], "Below-sea-level palette must remain blue"
+    print("Terrarium decoder, projections and land/water palette: OK")
 
 def main():
     parser = argparse.ArgumentParser()

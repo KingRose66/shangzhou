@@ -41,6 +41,10 @@ try{
    assert(row.inside,"City partially outside map: "+JSON.stringify(row));
    assert(row.hit,"City center obstructed by another token or label: "+JSON.stringify(row));
  }
+ const typeExpectations={capital:7,city:2,ford:2,pass:3,fort:3,village:4};
+ for(const [type,count] of Object.entries(typeExpectations))
+   assert(await page.locator(".geo-node.city-type-"+type).count()===count,
+     "Settlement visual type count mismatch for "+type);
  const names=page.locator(".geo-city-label");
  assert(await names.count()>=12,"Most city name labels should have clickable destinations");
  for(const id of ["yin","zhouyuan","jinnan","crossing"]){
@@ -66,6 +70,22 @@ try{
  assert(finderCenter&&finderCenter.x>newBounds.x&&finderCenter.x<newBounds.x+newBounds.width,
    "City finder failed to bring destination into view");
  await page.locator("#map-city-jump").selectOption("yin");
+ // The selected royal army can leave the city anchor and establish a road-side camp.
+ await page.locator("#map-city-jump").selectOption("taihang");
+ await page.locator("#btn-field-camp").click();
+ const camp=await page.evaluate(()=>{
+   const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
+   return a&&a.fieldPosition;
+ });
+ assert(camp&&camp.from==="yin"&&camp.to==="taihang","Road-side field camp was not persisted");
+ assert(await page.locator(".map-army.field-camp").count()===1,"Field camp marker was not drawn on the map");
+ await page.locator("#btn-withdraw-field-camp").click();
+ const withdrawn=await page.evaluate(()=>{
+   const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
+   return !a.fieldPosition;
+ });
+ assert(withdrawn,"Field camp could not be withdrawn");
+ await page.locator("#map-city-jump").selectOption("yin");
   // Army and person buttons remain available without covering city icon centers.
  assert(await page.locator(".map-army").count()>0,"Army flags disappeared");
  assert(await page.locator(".map-person").count()>0,"Character marker disappeared");
@@ -87,7 +107,7 @@ try{
  const after=await page.evaluate(()=>JSON.stringify(window.SHANGZHOU_DEBUG.getState()));
  assert(snapshot===after,"Practice unexpectedly altered the real campaign");
  assert(!errors.length,"Runtime errors: "+errors.join(" | "));
- console.log("City sprites click test passed: 21 sites with >=52px hit targets, clickable names, and autonomous field practice.");
+ console.log("City map test passed: 21 typed settlements, field-camp deployment/withdrawal and isolated field-battle practice.");
 }finally{
  if(browser)await browser.close();
  await new Promise(resolve=>server.close(resolve));
