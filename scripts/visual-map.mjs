@@ -75,15 +75,15 @@ try{
   const reset=await yin.boundingBox();
   assert(Math.abs(reset.x-before.x)<3&&Math.abs(reset.y-before.y)<3,
     "Full map failed to restore center after drag.");
+  await page.locator(".geo-map-controls button").filter({hasText:"卫星"}).click();
+  await page.waitForFunction(()=>document.querySelector(".local-geography")?.src.includes("china-satellite.webp")&&
+    document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth===1800);
   await page.locator(".geo-map-controls button").filter({hasText:"地形"}).click();
   await page.waitForFunction(()=>{
     const img=document.querySelector(".local-geography");
     return img&&(img.src.includes("china-elevation.webp")||img.src.includes("china-relief.webp"))&&
       img.complete&&img.naturalWidth===1800;
   });
-  await page.locator(".geo-map-controls button").filter({hasText:"卫星"}).click();
-  await page.waitForFunction(()=>document.querySelector(".local-geography")?.src.includes("china-satellite.webp")&&
-    document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth===1800);
   fs.mkdirSync("artifacts",{recursive:true});
   await page.locator("#map").screenshot({path:"artifacts/real-map-verified.png"});
   assert(!errors.length,"Page execution errors: "+errors.join(" | "));
