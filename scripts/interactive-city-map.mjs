@@ -73,7 +73,11 @@ try{
  // The selected royal army can choose a point on a reachable road, not only a city midpoint.
  const road=page.locator('.geographic-route-hit[data-road-from="yin"][data-road-to="taihang"]');
  assert(await road.count()===1,"Reachable road segment is not selectable");
- await road.click();
+ const roadPoint=await road.evaluate(el=>{
+   const p=el.getPointAtLength(el.getTotalLength()*.66),m=el.getScreenCTM();
+   return {x:m.a*p.x+m.c*p.y+m.e,y:m.b*p.x+m.d*p.y+m.f};
+ });
+ await page.mouse.click(roadPoint.x,roadPoint.y);
  const selectedRoad=await page.evaluate(()=>window.SHANGZHOU_DEBUG.getState().selectedRoadSegment);
  assert(selectedRoad&&selectedRoad.from==="yin"&&selectedRoad.to==="taihang","Road click did not set a field deployment point");
  await page.locator("#btn-road-march").click();
