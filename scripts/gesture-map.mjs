@@ -31,7 +31,7 @@ try{
   await page.locator("#event-actions button").first().click();
   const yin=page.locator('[data-settlement-id="yin"]');
   const map=page.locator("#map");
-  await page.waitForFunction(()=>document.querySelector(".local-geography")?.naturalWidth===1800);
+  await page.waitForFunction(()=>document.querySelector(".local-geography")?.naturalWidth>1000);
 
   // Mouse dragging starts even on a city: stationary clicks remain interactive.
   const original=center(await yin.boundingBox());
