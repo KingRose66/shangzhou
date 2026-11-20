@@ -71,21 +71,33 @@ try{
    "City finder failed to bring destination into view");
  await page.locator("#map-city-jump").selectOption("yin");
  // The selected royal army can choose a point on a reachable road, not only a city midpoint.
- const road=page.locator('.geographic-route-hit[data-road-from="yin"][data-road-to="taihang"]');
- assert(await road.count()===1,"Reachable road segment is not selectable");
- const roadPoint=await road.evaluate(el=>{
-   const p=el.getPointAtLength(el.getTotalLength()*.66),m=el.getScreenCTM();
-   return {x:m.a*p.x+m.c*p.y+m.e,y:m.b*p.x+m.d*p.y+m.f};
- });
+ const roadTargets=["taihang","jinnan","nan","daxinzhuang"];
+ let roadTarget=null,roadPoint=null;
+ for(const target of roadTargets){
+   const candidate=page.locator('.geographic-route-hit[data-road-from="yin"][data-road-to="'+target+'"]');
+   if(await candidate.count()!==1)continue;
+   const point=await candidate.evaluate(el=>{
+     const matrix=el.getScreenCTM(),length=el.getTotalLength();
+     for(const fraction of [.22,.32,.42,.58,.68,.78,.88]){
+       const p=el.getPointAtLength(length*fraction);
+       const x=matrix.a*p.x+matrix.c*p.y+matrix.e;
+       const y=matrix.b*p.x+matrix.d*p.y+matrix.f;
+       if(document.elementFromPoint(x,y)===el)return {x,y};
+     }
+     return null;
+   });
+   if(point){roadTarget=target;roadPoint=point;break;}
+ }
+ assert(roadPoint,"No unobstructed clickable section found on a reachable road");
  await page.mouse.click(roadPoint.x,roadPoint.y);
  const selectedRoad=await page.evaluate(()=>window.SHANGZHOU_DEBUG.getState().selectedRoadSegment);
- assert(selectedRoad&&selectedRoad.from==="yin"&&selectedRoad.to==="taihang","Road click did not set a field deployment point");
+ assert(selectedRoad&&selectedRoad.from==="yin"&&selectedRoad.to===roadTarget,"Road click did not set a field deployment point");
  await page.locator("#btn-road-march").click();
  const camp=await page.evaluate(()=>{
    const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
    return a&&a.fieldPosition;
  });
- assert(camp&&camp.from==="yin"&&camp.to==="taihang","Road-side field camp was not persisted");
+ assert(camp&&camp.from==="yin"&&camp.to===roadTarget,"Road-side field camp was not persisted");
  assert(await page.locator(".map-army.field-camp").count()===1,"Field camp marker was not drawn on the map");
  await page.locator("#btn-toggle-ambush").click();
  const ambush=await page.evaluate(()=>{
