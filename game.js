@@ -1230,7 +1230,7 @@ function fieldBattleLocation(fromId,toId,camp){
   const from=getSet(fromId),to=getSet(toId),site=Object.assign({},to);
   site.name=from.name+"—"+to.name+"野外";
   site.terrain=camp&&camp.terrain||roadFieldTerrain(from,to);
-  site.wall=0;site.field=true;
+  site.wall=0;site.field=true;site.ambush=!!(camp&&camp.ambush);
   return site;
 }
 function deploySelectedArmyFieldCamp(){
@@ -1251,8 +1251,16 @@ function deploySelectedArmyFieldCamp(){
   if(a.fodder<fodder)return notice("草料不足，野外扎营需要约 "+fodder+" 草料。");
   a.grain-=grain;a.fodder=Math.max(0,a.fodder-fodder);
   a.fieldPosition={from:origin.id,to:target.id,lon:(origin.lon+target.lon)/2,
-    lat:(origin.lat+target.lat)/2,terrain:roadFieldTerrain(origin,target)};
+    lat:(origin.lat+target.lat)/2,terrain:roadFieldTerrain(origin,target),ambush:false};
   addLog(a.name+"离开"+origin.name+"，在通往"+target.name+"的道路中段扎营。消耗部分行军粮草；后勤仍依托"+origin.name+"。","good");
+  refreshAllSupply();
+  render();
+}
+function toggleSelectedArmyAmbush(){
+  const a=getArmy(state.selectedArmy);
+  if(!a||a.owner!==state.player||!a.fieldPosition)return;
+  a.fieldPosition.ambush=!a.fieldPosition.ambush;
+  addLog(a.name+(a.fieldPosition.ambush?"在道路中段设伏，等待敌军进入伏击圈。":"解除伏击，恢复道路警戒。"),a.fieldPosition.ambush?"warning":"good");
   render();
 }
 function withdrawSelectedArmyFieldCamp(){
@@ -1261,6 +1269,7 @@ function withdrawSelectedArmyFieldCamp(){
   const camp=a.fieldPosition;
   a.fieldPosition=null;
   addLog(a.name+"撤出"+getSet(camp.from).name+"—"+getSet(camp.to).name+"野营地，返回"+getSet(a.at).name+"的后勤锚点。");
+  refreshAllSupply();
   render();
 }
 function planSelectedArmyRoute(){
@@ -1519,7 +1528,7 @@ function renderArmyDetail(){
   const campTarget=getSet(state.selectedSettlement);
   const canCamp=!a.fieldPosition&&!(a.route&&a.route.length)&&campTarget&&campTarget.id!==a.at&&getSet(a.at).roads.includes(campTarget.id);
   const fieldCampHtml=a.fieldPosition
-    ? '<div class="field-camp-status">野外驻营：'+getSet(a.fieldPosition.from).name+'—'+getSet(a.fieldPosition.to).name+' · 后勤锚点：'+getSet(a.at).name+'</div><button id="btn-withdraw-field-camp" class="tiny">撤营返回后勤锚点</button>'
+    ? '<div class="field-camp-status">'+(a.fieldPosition.ambush?'已设伏 · ':'道路驻营 · ')+getSet(a.fieldPosition.from).name+'—'+getSet(a.fieldPosition.to).name+' · 后勤锚点：'+getSet(a.at).name+'</div><button id="btn-toggle-ambush" class="tiny">'+(a.fieldPosition.ambush?'解除伏击':'设伏 · 伏击经过军队')+'</button><button id="btn-withdraw-field-camp" class="tiny">撤营返回后勤锚点</button>'
     : '<button id="btn-field-camp" class="tiny" '+(!canCamp?'disabled':'')+'>在所选道路中段扎营</button>';
   $("#army-detail").innerHTML=
     '<div class="stats">'+
@@ -1544,9 +1553,10 @@ function renderArmyDetail(){
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
   $("#army-stance").onchange=function(){setArmyStance(a.id,this.value);};
-  const campButton=$("#btn-field-camp"),withdrawButton=$("#btn-withdraw-field-camp");
+  const campButton=$("#btn-field-camp"),withdrawButton=$("#btn-withdraw-field-camp"),ambushButton=$("#btn-toggle-ambush");
   if(campButton)campButton.onclick=deploySelectedArmyFieldCamp;
   if(withdrawButton)withdrawButton.onclick=withdrawSelectedArmyFieldCamp;
+  if(ambushButton)ambushButton.onclick=toggleSelectedArmyAmbush;
   const marchTarget=getSet(state.selectedSettlement);
   const canMarch=!a.fieldPosition&&!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
   $("#btn-march").disabled=!canMarch;
@@ -1783,6 +1793,13 @@ function mergeArmies(){
   render();
 }
 
+function roadInterdictedFor(owner,fromId,toId){
+  const edge=roadEdgeKey(fromId,toId);
+  return state.armies.some(function(x){
+    return x.fieldPosition&&isHostile(owner,x.owner)&&
+      roadEdgeKey(x.fieldPosition.from,x.fieldPosition.to)===edge;
+  });
+}
 function supplyPathFor(a){
   const owner=a.owner;
   const minimum=Math.max(60,armyMen(a)*.08);
@@ -1800,7 +1817,7 @@ function supplyPathFor(a){
     }
 
     for(const nid of s.roads){
-      if(visited.has(nid)||nodeBlocked(nid,owner))continue;
+      if(visited.has(nid)||nodeBlocked(nid,owner)||roadInterdictedFor(owner,cur.id,nid))continue;
       const n=getSet(nid);
       if(!n)continue;
 
@@ -2051,10 +2068,13 @@ function beginEncounter(attacker,defender,attackerFrom,after,battleLocation){
   const fieldBattle=!!(battleLocation&&battleLocation.field);
   const pc=getChar(playerArmy.commander),ec=getChar(enemyArmy.commander);
   const siegeMode=!fieldBattle&&!!(defender.temporaryGarrison&&state.sieges[location.id]);
+  const ambushArmyId=fieldBattle&&location.ambush?defender.id:null;
   attacker.fieldPosition=null;defender.fieldPosition=null;
+  refreshAllSupply();
   turnBusy=true;
   pendingEncounter={attacker:attacker,defender:defender,playerArmy:playerArmy,enemyArmy:enemyArmy,
-    attackerFrom:attackerFrom,after:after,location:location,fieldBattle:fieldBattle,pc:pc,ec:ec,siegeMode:siegeMode};
+    attackerFrom:attackerFrom,after:after,location:location,fieldBattle:fieldBattle,ambushArmyId:ambushArmyId,
+    pc:pc,ec:ec,siegeMode:siegeMode};
 
   const playerIsAttacker=playerArmy===attacker;
   const retreatNode=playerIsAttacker?getSet(attackerFrom):retreatNodeStrict(playerArmy,attacker.at);
@@ -2080,7 +2100,7 @@ function commandPendingEncounter(){
   BATTLE_ENGINE.start({
     attacker:p.attacker,defender:p.defender,playerArmy:p.playerArmy,enemyArmy:p.enemyArmy,
     terrain:p.location.terrain,terrainName:p.siegeMode?"土垣聚落强攻":terrainNames[p.location.terrain],locationName:p.location.name,
-    siege:p.siegeMode,
+    siege:p.siegeMode,ambushArmyId:p.ambushArmyId,
     commanders:{[p.playerArmy.id]:p.pc,[p.enemyArmy.id]:p.ec},
     onFinish:function(result){
       resolveTacticalResult(result,p.attacker,p.defender,p.playerArmy,p.enemyArmy,p.attackerFrom,p.after,p.location);
@@ -2209,11 +2229,13 @@ function syncFromBattle(a,pack){
     a.morale=Math.max(12,Math.min(90,weighted/remaining));
   }else a.morale=0;
 }
-function pursuitLoss(loser,winner){
+function pursuitLoss(loser,winner,battleLocation){
   const carts=chariotCount(winner);
-  const terrain=getSet(loser.at).terrain;
+  const terrain=battleLocation&&battleLocation.terrain||getSet(loser.at).terrain;
   const open=["plain","rolling"].includes(terrain);
   let pct=.035+(open?Math.min(.13,carts*.005):Math.min(.05,carts*.002));
+  if(winner.morale>70)pct*=1.12;
+  if(loser.morale<35)pct*=1.12;
   loser.units.forEach(function(u){u.men=Math.max(0,Math.round(u.men*(1-pct)));});
   loser.units=loser.units.filter(function(u){return u.men>0;});
 }
@@ -2228,9 +2250,9 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
   syncFromBattle(enemyArmy,result.enemy);
   const winner=result.winnerSide==="player"?playerArmy:enemyArmy;
   const loser=winner===playerArmy?enemyArmy:playerArmy;
-  pursuitLoss(loser,winner);
+  pursuitLoss(loser,winner,battleLocation);
 
-  addLog(winner.name+"在"+locationName+"取得战场优势；"+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
+  addLog(winner.name+"在"+locationName+"取得战场优势；+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
 
   if(loser.temporaryGarrison){
     addLog(loser.name+"守备体系瓦解，幸存者逃散、被俘或退回民间。","bad");
@@ -2268,7 +2290,7 @@ function autoResolve(attacker,defender,attackerFrom,battleLocation){
   const ratio=Math.max(pa,pd)/Math.max(1,Math.min(pa,pd));
   damageArmy(winner,Math.min(.22,.07+.035/ratio));
   damageArmy(loser,Math.min(.48,.16+.105*ratio));
-  pursuitLoss(loser,winner);
+  pursuitLoss(loser,winner,s);
   winner.morale=Math.min(88,winner.morale+4);loser.morale=Math.max(18,loser.morale-16);
   addLog(winner.name+"击溃"+loser.name+"。","warning");
   if(loser.temporaryGarrison){
