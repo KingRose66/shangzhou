@@ -79,6 +79,19 @@ try{
  });
  assert(camp&&camp.from==="yin"&&camp.to==="taihang","Road-side field camp was not persisted");
  assert(await page.locator(".map-army.field-camp").count()===1,"Field camp marker was not drawn on the map");
+ await page.locator("#btn-toggle-ambush").click();
+ const ambush=await page.evaluate(()=>{
+   const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
+   return a&&a.fieldPosition&&a.fieldPosition.ambush;
+ });
+ assert(ambush,"Road camp did not enter ambush stance");
+ assert(await page.locator(".map-army.field-ambush").count()===1,"Ambush marker was not distinguished on the map");
+ await page.locator("#btn-toggle-ambush").click();
+ const noAmbush=await page.evaluate(()=>{
+   const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
+   return a&&a.fieldPosition&&!a.fieldPosition.ambush;
+ });
+ assert(noAmbush,"Ambush could not be cancelled");
  await page.locator("#btn-withdraw-field-camp").click();
  const withdrawn=await page.evaluate(()=>{
    const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
@@ -99,6 +112,19 @@ try{
  await page.locator("#battle-overlay.show").waitFor({timeout:8000});
  assert((await page.locator("#battle-status").innerText()).includes("野战演练"),
    "Battle engine didn't begin a realtime practice encounter");
+ assert(await page.locator("#battle-player-roster [data-battle-unit]").count()>0,"Player tactical roster was not rendered");
+ assert(await page.locator("#battle-enemy-roster [data-battle-unit]").count()>0,"Enemy tactical roster was not rendered");
+ assert(await page.locator("#battle-minimap").count()===1,"Tactical minimap is missing");
+ await page.locator("#battle-player-roster [data-battle-unit]").first().click();
+ assert(!(await page.locator("#battle-selected-title").innerText()).includes("未选择"),"Roster selection did not select a unit");
+ await page.locator("#battle-reform").click();
+ assert(await page.evaluate(()=>window.BATTLE_ENGINE.selected.orderMode==="hold"),"Reform command did not hold the unit");
+ await page.locator("#battle-flank").click();
+ assert(await page.evaluate(()=>window.BATTLE_ENGINE.selected.orderMode==="move"&&window.BATTLE_ENGINE.selected.tx!==null),"Flanking command did not create a manoeuvre order");
+ await page.locator("#battle-charge").click();
+ assert(await page.evaluate(()=>window.BATTLE_ENGINE.selected.orderMode==="manual"&&!!window.BATTLE_ENGINE.selected.targetEnemy),"Charge command did not acquire an enemy");
+ await page.locator("#battle-zoom-in").click();
+ assert(await page.evaluate(()=>window.BATTLE_ENGINE.camera.zoom>1),"Battle camera zoom control failed");
  await page.locator("#battle-retreat").click();
  await page.locator("#battle-overlay.show").waitFor({state:"hidden",timeout:5000});
  await page.locator("#dialog[open]").waitFor({timeout:4000});
@@ -107,7 +133,7 @@ try{
  const after=await page.evaluate(()=>JSON.stringify(window.SHANGZHOU_DEBUG.getState()));
  assert(snapshot===after,"Practice unexpectedly altered the real campaign");
  assert(!errors.length,"Runtime errors: "+errors.join(" | "));
- console.log("City map test passed: 21 typed settlements, field-camp deployment/withdrawal and isolated field-battle practice.");
+ console.log("Tactical test passed: 21 typed settlements, road ambush controls, unit rosters, battle commands, minimap and camera.");
 }finally{
  if(browser)await browser.close();
  await new Promise(resolve=>server.close(resolve));
