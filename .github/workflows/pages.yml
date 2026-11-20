@@ -28,7 +28,7 @@ jobs:
           python3 -m pip install --user --quiet numpy Pillow basemap-data pyshp
           python3 scripts/build-terrain.py
           python3 scripts/build-elevation.py --self-test
-          python3 scripts/build-elevation.py || echo 'High-resolution elevation failed; bundled relief fallback remains enabled.'
+          python3 scripts/build-elevation.py --force || echo 'High-resolution elevation failed; bundled relief fallback remains enabled.'
           test -s assets/china-satellite.webp
           test -s assets/china-relief.webp
       - name: Commit reproducible geographic assets
