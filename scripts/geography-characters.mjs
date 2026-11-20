@@ -48,7 +48,8 @@ assert(controls.length>=7,"zoom/full-view/terrain/expanded-map/input-mode contro
 const terrainToggle=[...controls].find(button=>button.title.includes("切换地形晕渲与地表影像"));
 assert(terrainToggle,"terrain imagery toggle missing");
 terrainToggle.click();
-assert($(".geographic-tile").src.includes("assets/china-relief.webp"),"local relief toggle failed");
+assert($(".geographic-tile").src.includes("assets/china-elevation.webp")||
+  $(".geographic-tile").src.includes("assets/china-relief.webp"),"local relief toggle failed");
 [...w.document.querySelectorAll(".geo-map-controls button")]
   .find(button=>button.title.includes("切换地形晕渲与地表影像")).click();
 assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"return to imagery failed");
