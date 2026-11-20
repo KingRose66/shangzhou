@@ -1084,7 +1084,14 @@ function renderMap(){
       const box={x:actual.x+d.x-size/2-3,y:actual.y+d.y-size/2-3,w:size+6,h:size+6};
       return fits(box,5)&&!occupiedMarkers.some(rect=>overlaps(box,rect,5));
     })||{x:0,y:0};
-    const center={x:actual.x+chosen.x,y:actual.y+chosen.y};
+    const edgePad=size/2+7;
+    // Keep every historical site on-screen. When its true anchor lies just
+    // beyond the current viewport, pin the symbol to the nearest edge and
+    // retain the leader line to the geographic anchor.
+    const center={
+      x:Math.max(edgePad,Math.min(m.w-edgePad,actual.x+chosen.x)),
+      y:Math.max(edgePad,Math.min(m.h-edgePad,actual.y+chosen.y))
+    };
     markerPositions.set(s.id,center);
     occupiedMarkers.push({id:s.id,x:center.x-size/2-3,y:center.y-size/2-3,w:size+6,h:size+6});
   });
