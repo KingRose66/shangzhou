@@ -40,7 +40,10 @@ for (const [id,u] of Object.entries(D.units)) {
 const html=fs.readFileSync("index.html","utf8");
 for (const id of [
   "map","armies","army-detail","diplomacy-detail","event-overlay","event-title","event-actions","battle-report-overlay","battle-report-title","battle-report-close","encounter-overlay","battle-overlay","battle-canvas",
-  "btn-end-turn","btn-march","btn-scout","btn-assault","btn-demand-tribute","encounter-command","encounter-auto","encounter-retreat"
+  "btn-end-turn","btn-march","btn-scout","btn-assault","btn-demand-tribute","encounter-command","encounter-auto","encounter-retreat",
+  "battle-location-title","battle-field-label","battle-clock","battle-player-strength","battle-enemy-strength",
+  "battle-player-roster","battle-enemy-roster","battle-minimap","battle-selected-title","battle-charge","battle-flank",
+  "battle-reform","battle-hold-selected","battle-zoom-in","battle-zoom-out","battle-camera-reset"
 ]) {
   if(!html.includes(`id="${id}"`)) throw new Error(`Missing DOM id ${id}`);
 }
