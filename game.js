@@ -2252,7 +2252,7 @@ function resolveTacticalResult(result,attacker,defender,playerArmy,enemyArmy,att
   const loser=winner===playerArmy?enemyArmy:playerArmy;
   pursuitLoss(loser,winner,battleLocation);
 
-  addLog(winner.name+"在"+locationName+"取得战场优势；+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
+  addLog(winner.name+"在"+locationName+"取得战场优势；"+loser.name+"发生溃退。",winner.owner===state.player?"good":"bad");
 
   if(loser.temporaryGarrison){
     addLog(loser.name+"守备体系瓦解，幸存者逃散、被俘或退回民间。","bad");
