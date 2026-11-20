@@ -70,9 +70,13 @@ try{
  assert(finderCenter&&finderCenter.x>newBounds.x&&finderCenter.x<newBounds.x+newBounds.width,
    "City finder failed to bring destination into view");
  await page.locator("#map-city-jump").selectOption("yin");
- // The selected royal army can leave the city anchor and establish a road-side camp.
- await page.locator("#map-city-jump").selectOption("taihang");
- await page.locator("#btn-field-camp").click();
+ // The selected royal army can choose a point on a reachable road, not only a city midpoint.
+ const road=page.locator('.geographic-route-hit[data-road-from="yin"][data-road-to="taihang"]');
+ assert(await road.count()===1,"Reachable road segment is not selectable");
+ await road.click();
+ const selectedRoad=await page.evaluate(()=>window.SHANGZHOU_DEBUG.getState().selectedRoadSegment);
+ assert(selectedRoad&&selectedRoad.from==="yin"&&selectedRoad.to==="taihang","Road click did not set a field deployment point");
+ await page.locator("#btn-road-march").click();
  const camp=await page.evaluate(()=>{
    const a=window.SHANGZHOU_DEBUG.getState().armies.find(x=>x.id==="a1");
    return a&&a.fieldPosition;
