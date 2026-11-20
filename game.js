@@ -700,6 +700,7 @@ function geographicRoutes(map,m,selectedEdges,plannedEdges,fieldEdges){
   svg.setAttribute("class","geographic-routes");
   svg.setAttribute("viewBox","0 0 "+m.w+" "+m.h);
   svg.setAttribute("aria-hidden","true");
+  svg.setAttribute("pointer-events","auto");
   const seen=new Set();
   state.settlements.forEach(function(s){
     s.roads.forEach(function(id){
@@ -712,9 +713,32 @@ function geographicRoutes(map,m,selectedEdges,plannedEdges,fieldEdges){
       const curve=Math.min(12,Math.hypot(b.x-a.x,b.y-a.y)*.08);
       const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
       const mx=(a.x+b.x)/2-dy/dist*curve,my=(a.y+b.y)/2+dx/dist*curve;
-      p.setAttribute("d","M "+a.x+" "+a.y+" Q "+mx+" "+my+" "+b.x+" "+b.y);
-      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":"")+(plannedEdges.has(k)?" planned-route":"")+(fieldEdges&&fieldEdges.has(k)?" field-camp-route":""));
+      const roadD="M "+a.x+" "+a.y+" Q "+mx+" "+my+" "+b.x+" "+b.y;
+      const selectedRoad=state.selectedRoadSegment&&roadEdgeKey(state.selectedRoadSegment.from,state.selectedRoadSegment.to)===roadEdgeKey(s.id,id);
+      p.setAttribute("d",roadD);
+      p.setAttribute("class","geographic-route"+(blocked?" blocked":"")+(supply?" supply-route":"")+(plannedEdges.has(k)?" planned-route":"")+(fieldEdges&&fieldEdges.has(k)?" field-camp-route":"")+(selectedRoad?" selected-road":""));
+      p.setAttribute("pointer-events","none");
       svg.appendChild(p);
+      const hit=document.createElementNS("http://www.w3.org/2000/svg","path");
+      hit.setAttribute("d",roadD);
+      hit.setAttribute("class","geographic-route-hit");
+      hit.setAttribute("data-road-from",s.id);
+      hit.setAttribute("data-road-to",id);
+      hit.setAttribute("pointer-events","stroke");
+      hit.addEventListener("click",function(e){
+        e.preventDefault();e.stopPropagation();
+        const rect=map.getBoundingClientRect();
+        const px=(e.clientX-rect.left)/Math.max(1,rect.width)*m.w;
+        const py=(e.clientY-rect.top)/Math.max(1,rect.height)*m.h;
+        const vx=b.x-a.x,vy=b.y-a.y,den=Math.max(1,vx*vx+vy*vy);
+        const t=Math.max(.06,Math.min(.94,((px-a.x)*vx+(py-a.y)*vy)/den));
+        state.selectedRoadSegment={from:s.id,to:id,t:t,
+          lon:s.lon+(t.id?0:(t.lon-s.lon)*t),lat:s.lat+(t.lat-s.lat)*t};
+        state.selectedRoadSegment.lon=s.lon+(t.lon-s.lon)*t;
+        state.selectedRoadSegment.lat=s.lat+(t.lat-s.lat)*t;
+        render();
+      });
+      svg.appendChild(hit);
     });
   });
   map.appendChild(svg);
@@ -1256,6 +1280,48 @@ function deploySelectedArmyFieldCamp(){
   refreshAllSupply();
   render();
 }
+function deploySelectedArmyAtRoadPoint(){
+  const a=getArmy(state.selectedArmy),seg=state.selectedRoadSegment;
+  if(turnBusy||state.gameOver||pendingEncounter||pendingWorldEvent||pendingBattleReport)return;
+  if(!a||a.owner!==state.player)return notice("请先选择一支我方军队。");
+  if(a.fieldPosition)return notice("请先撤出现有野营地，再重新部署。");
+  if(a.route&&a.route.length)return notice("请先取消连续行军路线，再选择野外位置。");
+  if(!seg)return notice("请先在地图上点击一条道路，选定野外部署位置。");
+  if(a.laborers<requiredLaborers(a))return notice("民夫不足，无法组织远程行军。");
+  const from=getSet(seg.from),to=getSet(seg.to);
+  if(!from||!to)return notice("所选道路已不存在，请重新选择。");
+  if(findEnemyFieldCampOnRoad(a,seg.from,seg.to))return notice("目标道路已有敌军野营或伏兵，不能直接进入。");
+  const pathFrom=accessibleMarchPath(a,seg.from),pathTo=accessibleMarchPath(a,seg.to);
+  if(!pathFrom&&!pathTo)return notice("该道路段不在己方或获准通行的道路网络内。");
+  function pathCost(path){
+    const cost={grain:0,fodder:0};
+    for(let i=1;i<path.length;i++){
+      if(findEnemyFieldCampOnRoad(a,path[i-1],path[i]))return null;
+      const leg=marchCost(a,getSet(path[i]));
+      cost.grain+=leg.grain;cost.fodder+=leg.fodder;
+    }
+    return cost;
+  }
+  const cFrom=pathFrom?pathCost(pathFrom):null;
+  const cTo=pathTo?pathCost(pathTo):null;
+  const partialFrom=marchCost(a,to),partialTo=marchCost(a,from);
+  if(cFrom){cFrom.grain+=partialFrom.grain*seg.t;cFrom.fodder+=partialFrom.fodder*seg.t;}
+  if(cTo){cTo.grain+=partialTo.grain*(1-seg.t);cTo.fodder+=partialTo.fodder*(1-seg.t);}
+  const score=x=>x?x.grain+x.fodder*1.5:Infinity;
+  const useFrom=score(cFrom)<=score(cTo),cost=useFrom?cFrom:cTo,path=useFrom?pathFrom:pathTo;
+  if(!cost)return notice("预定路线受到敌军野营截断，请先清除伏兵。");
+  if(a.grain<cost.grain)return notice("军粮不足，沿道路部署需要约 "+Math.ceil(cost.grain)+" 石。");
+  if(a.fodder<cost.fodder)return notice("草料不足，沿道路部署需要约 "+Math.ceil(cost.fodder)+" 草料。");
+  const origin=getSet(a.at),anchor=useFrom?from:to;
+  a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);
+  a.previous=a.at;a.at=anchor.id;a.route=[];
+  a.fieldPosition={from:seg.from,to:seg.to,lon:seg.lon,lat:seg.lat,t:seg.t,
+    terrain:roadFieldTerrain(from,to),ambush:false};
+  state.selectedRoadSegment=null;
+  addLog(a.name+"由"+origin.name+"沿道路网络行军，经"+path.map(id=>getSet(id).name).join("—")+
+    "，抵达"+from.name+"—"+to.name+"道路中段。耗用军粮 "+Math.ceil(cost.grain)+" 石、草料 "+Math.ceil(cost.fodder)+"。","good");
+  refreshAllSupply();render();
+}
 function toggleSelectedArmyAmbush(){
   const a=getArmy(state.selectedArmy);
   if(!a||a.owner!==state.player||!a.fieldPosition)return;
@@ -1527,9 +1593,16 @@ function renderArmyDetail(){
   const siege=state.sieges[a.at]&&state.sieges[a.at].attackerArmyId===a.id?state.sieges[a.at]:null;
   const campTarget=getSet(state.selectedSettlement);
   const canCamp=!a.fieldPosition&&!(a.route&&a.route.length)&&campTarget&&campTarget.id!==a.at&&getSet(a.at).roads.includes(campTarget.id);
+  const roadSeg=state.selectedRoadSegment;
+  const roadPathFrom=roadSeg?accessibleMarchPath(a,roadSeg.from):null;
+  const roadPathTo=roadSeg?accessibleMarchPath(a,roadSeg.to):null;
+  const canRoadMove=!a.fieldPosition&&!(a.route&&a.route.length)&&!!(roadPathFrom||roadPathTo);
+  const roadMoveHtml=roadSeg
+    ? '<div class="field-camp-status">地图选定道路：'+getSet(roadSeg.from).name+'—'+getSet(roadSeg.to).name+' · 位置 '+Math.round(roadSeg.t*100)+'%</div><button id="btn-road-march" class="tiny" '+(!canRoadMove?'disabled':'')+'>沿道路网络行军至该位置</button>'
+    : '<p class="small muted">可直接点击地图道路，选择任意可达的野外部署位置。</p>';
   const fieldCampHtml=a.fieldPosition
     ? '<div class="field-camp-status">'+(a.fieldPosition.ambush?'已设伏 · ':'道路驻营 · ')+getSet(a.fieldPosition.from).name+'—'+getSet(a.fieldPosition.to).name+' · 后勤锚点：'+getSet(a.at).name+'</div><button id="btn-toggle-ambush" class="tiny">'+(a.fieldPosition.ambush?'解除伏击':'设伏 · 伏击经过军队')+'</button><button id="btn-withdraw-field-camp" class="tiny">撤营返回后勤锚点</button>'
-    : '<button id="btn-field-camp" class="tiny" '+(!canCamp?'disabled':'')+'>在所选道路中段扎营</button>';
+    : '<button id="btn-field-camp" class="tiny" '+(!canCamp?'disabled':'')+'>在所选道路中段扎营</button>'+roadMoveHtml;
   $("#army-detail").innerHTML=
     '<div class="stats">'+
       '<span>兵力</span><b>'+fmt(armyMen(a))+'</b>'+
@@ -1553,10 +1626,11 @@ function renderArmyDetail(){
     (siege?'<p class="small warning">正在围困 '+getSet(a.at).name+' · 已持续 '+siege.turns+' 季。可等待其粮尽，或选择强攻。</p>':'');
   $("#commander-select").onchange=function(){assignCommander(a.id,this.value);};
   $("#army-stance").onchange=function(){setArmyStance(a.id,this.value);};
-  const campButton=$("#btn-field-camp"),withdrawButton=$("#btn-withdraw-field-camp"),ambushButton=$("#btn-toggle-ambush");
+  const campButton=$("#btn-field-camp"),withdrawButton=$("#btn-withdraw-field-camp"),ambushButton=$("#btn-toggle-ambush"),roadButton=$("#btn-road-march");
   if(campButton)campButton.onclick=deploySelectedArmyFieldCamp;
   if(withdrawButton)withdrawButton.onclick=withdrawSelectedArmyFieldCamp;
   if(ambushButton)ambushButton.onclick=toggleSelectedArmyAmbush;
+  if(roadButton)roadButton.onclick=deploySelectedArmyAtRoadPoint;
   const marchTarget=getSet(state.selectedSettlement);
   const canMarch=!a.fieldPosition&&!!(marchTarget&&marchTarget.id!==a.at&&getSet(a.at).roads.includes(marchTarget.id));
   $("#btn-march").disabled=!canMarch;
