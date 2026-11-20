@@ -33,6 +33,8 @@ try{
   const map=page.locator("#map");
   await page.waitForFunction(()=>document.querySelector(".local-geography")?.naturalWidth>1000);
 
+  // Establish a true full-map baseline before measuring drag/reset behavior.
+  await page.locator(".geo-map-controls button").filter({hasText:"全图"}).click();
   // Mouse dragging starts even on a city: stationary clicks remain interactive.
   const original=center(await yin.boundingBox());
   await page.mouse.move(original.x,original.y);
