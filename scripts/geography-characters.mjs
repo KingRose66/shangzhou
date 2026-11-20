@@ -44,10 +44,13 @@ assert(w.document.querySelectorAll(".geo-node").length===w.GAME_DATA.settlements
 assert(w.document.querySelectorAll(".geographic-tile").length===1,"packaged terrain raster missing");
 assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"local NASA image not mounted");
 const controls=w.document.querySelectorAll(".geo-map-controls button");
-assert(controls.length===5,"zoom/full-view/terrain/input-mode controls missing");
-controls[3].click();
+assert(controls.length>=7,"zoom/full-view/terrain/expanded-map/input-mode controls missing");
+const terrainToggle=[...controls].find(button=>button.title.includes("切换地形晕渲与地表影像"));
+assert(terrainToggle,"terrain imagery toggle missing");
+terrainToggle.click();
 assert($(".geographic-tile").src.includes("assets/china-relief.webp"),"local relief toggle failed");
-w.document.querySelectorAll(".geo-map-controls button")[3].click();
+[...w.document.querySelectorAll(".geo-map-controls button")]
+  .find(button=>button.title.includes("切换地形晕渲与地表影像")).click();
 assert($(".geographic-tile").src.includes("assets/china-satellite.webp"),"return to imagery failed");
 
 assert(w.SHANGZHOU_DEBUG.positionForTest("wen_ding").id==="yin","Wen Ding should start in the Shang capital");
