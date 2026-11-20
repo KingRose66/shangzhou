@@ -816,13 +816,38 @@
 
   BattleEngine.prototype.handleClick=function(e){
     if(this.suppressClick){this.suppressClick=false;return;}
-    _baseBattle.handleClick.call(this,e);
+    if(!this.running)return;
+    const p=this.point(e);
+    let pick=null,dist=Infinity;
+    this.units.filter(u=>u.side==="player"&&!u.routed&&u.men>0).forEach(u=>{
+      const d=Math.hypot(u.x-p.x,u.y-p.y),hit=Math.max(42,(u.width||82)*.58);
+      if(d<hit&&d<dist){pick=u;dist=d;}
+    });
+    this.selected=pick;
+    this.units.forEach(u=>u.selected=u===pick);
+    this.updateDetail();
     this.renderBattleHud(true);
   };
 
   BattleEngine.prototype.handleOrder=function(e){
-    _baseBattle.handleOrder.call(this,e);
-    this.commandNotice=this.selected?this.selected.name+"：已下达战术命令。":"已下达战术命令。";
+    if(!this.running||!this.selected||this.selected.routed)return;
+    const p=this.point(e);
+    let enemy=null,dist=Infinity;
+    this.units.filter(u=>u.side==="enemy"&&!u.routed&&u.men>0).forEach(u=>{
+      const d=Math.hypot(u.x-p.x,u.y-p.y),hit=Math.max(48,(u.width||82)*.62);
+      if(d<hit&&d<dist){enemy=u;dist=d;}
+    });
+    if(enemy){
+      this.selected.orderMode="manual";
+      this.selected.targetEnemy=enemy;
+      this.selected.tx=null;this.selected.ty=null;
+    }else{
+      this.selected.orderMode="move";
+      this.selected.targetEnemy=null;
+      this.selected.tx=p.x;this.selected.ty=p.y;
+      this.selected.guardX=p.x;this.selected.guardY=p.y;
+    }
+    this.commandNotice=this.selected.name+"："+(enemy?"攻击 "+enemy.name:"向指定位置机动");
     this.renderBattleHud(true);
   };
 
