@@ -9,7 +9,7 @@ let turnBusy = false;
 let pendingEncounter = null;
 let pendingWorldEvent = null;
 let pendingBattleReport = null;
-const geoMapView={lon:null,lat:null,zoomDelta:.7,mode:'relief',wheelMode:'pan',expanded:false};
+const geoMapView={lon:null,lat:null,zoomDelta:.7,mode:'imagery',wheelMode:'pan',expanded:false};
 
 function deepCopy(v){ return JSON.parse(JSON.stringify(v)); }
 function getSet(id){ return state.settlements.find(function(s){return s.id===id;}); }
