@@ -57,6 +57,7 @@ try{
   }
   const initial=await assertFit();
   assert(initial.out.length===0,"Initial full map clips cities: "+JSON.stringify(initial));
+  await page.locator(".geo-map-controls button").filter({hasText:"全图"}).click();
   const yin=page.locator('[data-settlement-id="yin"]');
   const before=await yin.boundingBox();
   const mapBounds=await page.locator("#map").boundingBox();
@@ -75,8 +76,11 @@ try{
   assert(Math.abs(reset.x-before.x)<3&&Math.abs(reset.y-before.y)<3,
     "Full map failed to restore center after drag.");
   await page.locator(".geo-map-controls button").filter({hasText:"地形"}).click();
-  await page.waitForFunction(()=>document.querySelector(".local-geography")?.src.includes("china-relief.webp")&&
-    document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth===1800);
+  await page.waitForFunction(()=>{
+    const img=document.querySelector(".local-geography");
+    return img&&(img.src.includes("china-elevation.webp")||img.src.includes("china-relief.webp"))&&
+      img.complete&&img.naturalWidth===1800;
+  });
   await page.locator(".geo-map-controls button").filter({hasText:"卫星"}).click();
   await page.waitForFunction(()=>document.querySelector(".local-geography")?.src.includes("china-satellite.webp")&&
     document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth===1800);
