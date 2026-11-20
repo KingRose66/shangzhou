@@ -2666,7 +2666,20 @@ function runAiActions(actions,index,done){
   const act=actions[index],a=getArmy(act.armyId);
   if(!a){runAiActions(actions,index+1,done);return;}
   const origin=a.at,dest=getSet(act.targetId),cost=marchCost(a,dest);
+  const fieldEnemy=findEnemyFieldCampOnRoad(a,origin,dest.id);
   a.grain-=cost.grain;a.fodder=Math.max(0,a.fodder-cost.fodder);a.previous=origin;a.at=dest.id;
+  if(fieldEnemy){
+    const camp=fieldEnemy.fieldPosition,site=fieldBattleLocation(origin,dest.id,camp);
+    addLog(a.name+"在"+getSet(origin).name+"—"+dest.name+"道路上遭遇野营伏兵。","warning");
+    if(fieldEnemy.owner===state.player){
+      beginEncounter(a,fieldEnemy,origin,function(){runAiActions(actions,index+1,done);},site);
+    }else{
+      fieldEnemy.fieldPosition=null;refreshAllSupply();
+      autoResolve(a,fieldEnemy,origin,site);
+      runAiActions(actions,index+1,done);
+    }
+    return;
+  }
   const defender=state.armies.find(function(x){return isHostile(a.owner,x.owner)&&x.at===dest.id&&armyMen(x)>0;});
   if(defender){
     if(defender.owner===state.player){
