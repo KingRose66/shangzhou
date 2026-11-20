@@ -798,3 +798,9 @@ dialog::backdrop{background:#0009}
 
 .map .army-token.map-army.field-ambush{border-color:#e2a15c;background:rgba(77,42,26,.98);box-shadow:0 0 0 3px rgba(12,26,21,.85),0 0 17px rgba(222,139,70,.7)}
 .map .army-token.map-army.field-ambush:after{content:"伏";position:absolute;top:-8px;right:-7px;width:17px;height:17px;display:grid;place-items:center;border-radius:50%;background:#a84e32;color:#fff0d0;font-size:9px;font-weight:900;border:1px solid #edc08a}
+
+/* Road hit targets: transparent, wide click corridor over the visible route line. */
+.geographic-routes{pointer-events:auto}
+.geographic-route{pointer-events:none}
+.geographic-route-hit{fill:none;stroke:transparent;stroke-width:16;pointer-events:stroke;cursor:crosshair}
+.geographic-route.selected-road{stroke:#f2bd6a;stroke-width:4;stroke-dasharray:3 3;filter:drop-shadow(0 0 4px #33200b)}
