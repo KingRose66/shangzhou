@@ -1151,10 +1151,10 @@ function renderMap(){
     const p=a.fieldPosition?geoScreenPosition(a.fieldPosition.lon,a.fieldPosition.lat,m):
       (markerPositions.get(s.id)||geoScreenPosition(s.lon,s.lat,m));
     const army=mapEl("button","army-token map-army "+(a.owner===state.player?"friendly":isHostile(state.player,a.owner)?"enemy":"foreign")+
-      (a.fieldPosition?" field-camp":"")+(a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
+      (a.fieldPosition?" field-camp":"")+(a.fieldPosition&&a.fieldPosition.ambush?" field-ambush":"")+(a.id===state.selectedArmy?" selected":""),p.x+34+(i%3)*11,p.y-27+(i%2)*11);
     const count=a.owner===state.player?fmt(armyMen(a)):intelLevel(s)>=3?fmt(armyMen(a)):intelLevel(s)===2?"约"+fmt(roughNumber(armyMen(a),100)):"？";
-    army.type="button";army.textContent=(a.fieldPosition?"⛺ ":"⚑ ")+count;
-    army.title=a.name+" · "+(a.fieldPosition?("野外驻营："+getSet(a.fieldPosition.from).name+"—"+getSet(a.fieldPosition.to).name+" · 后勤锚点 "+s.name):s.name)+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
+    army.type="button";army.textContent=(a.fieldPosition?(a.fieldPosition.ambush?"伏⚑ ":"⛺ "):"⚑ ")+count;
+    army.title=a.name+" · "+(a.fieldPosition?((a.fieldPosition.ambush?"道路伏击：":"野外驻营：")+getSet(a.fieldPosition.from).name+"—"+getSet(a.fieldPosition.to).name+" · 后勤锚点 "+s.name):s.name)+" · "+(a.commander?getChar(a.commander)?.name||"":"无主将");
     army.onclick=function(e){
       e.stopPropagation();
       if(a.owner===state.player)selectArmy(a.id);
