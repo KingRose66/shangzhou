@@ -643,7 +643,7 @@
     const direction=side==="player"?1:-1;
     const spacingX=Math.min(92,this.w*.061);
     const spacingY=Math.min(84,this.h*.115);
-    const baseX=side==="player"?this.w*.145:this.w*.855;
+    const baseX=side==="player"?this.w*.225:this.w*.775;
     const baseY=this.h*.235;
     created.forEach((u,i)=>{
       const row=i%5;
@@ -695,7 +695,8 @@
       zones.push({type:"mud",x:w*.545,y:h*.07,w:w*.06,h:h*.86});
       zones.push({type:"forest",x:w*.72,y:h*.10,w:w*.15,h:h*.22});
     }else{
-      _baseBattle.buildArmy.call(this,army,side,isAttacker);
+      zones.push({type:"field",x:w*.18,y:h*.28,w:w*.26,h:h*.32});
+      zones.push({type:"forest",x:w*.68,y:h*.18,w:w*.17,h:h*.24});
     }
     if(siege){
       zones.push({type:"ditch",x:w*.625,y:h*.08,w:w*.035,h:h*.84,gateY:h*.50,gateHalf:70});
