@@ -467,7 +467,7 @@ function freshState(player){
 
 function startGame(player,options){
   geoMapView.lon=null;geoMapView.lat=null;geoMapView.zoomDelta=.7;
-  geoMapView.mode='relief';
+  geoMapView.mode='imagery';
   state=freshState(player);
   pendingEncounter=null;pendingWorldEvent=null;pendingBattleReport=null;turnBusy=false;
   initializeCharacterLocations();
