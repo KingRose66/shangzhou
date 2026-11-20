@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#17130f" />
   <title>大邑商：四土</title>
-  <link rel="stylesheet" href="styles.css?v=1.10.0" />
+  <link rel="stylesheet" href="styles.css?v=1.11.0" />
 </head>
 <body>
   <div class="app">
@@ -270,10 +270,19 @@
   </div>
 
   <div id="battle-overlay" class="battle-overlay">
-    <div class="battle-topbar">
-      <div>
-        <b>实时野战</b>
-        <span id="battle-status">—</span>
+    <header class="battle-topbar">
+      <div class="battle-brand">
+        <span class="battle-brand-seal">商</span>
+        <div><b>大邑商 · 战场</b><small>晚商四土战役指挥</small></div>
+      </div>
+      <div class="battle-heading">
+        <h2 id="battle-location-title">野外战场</h2>
+        <div><span id="battle-field-label">地形</span><i></i><span id="battle-clock">战斗时间 00:00</span></div>
+        <span id="battle-status">两军列阵 · 等待军令</span>
+      </div>
+      <div class="battle-metrics">
+        <div><small>我方现存</small><b id="battle-player-strength">—</b></div>
+        <div><small>敌方现存</small><b id="battle-enemy-strength">—</b></div>
       </div>
       <div class="battle-controls">
         <button id="battle-advance" title="全军主动迎战敌军">全军推进</button>
@@ -282,16 +291,55 @@
         <button id="battle-speed">速度 ×1</button>
         <button id="battle-retreat">撤退</button>
       </div>
-    </div>
-    <canvas id="battle-canvas"></canvas>
-    <div class="battle-footer">
-      <div id="battle-unit-detail">点击己方单位查看状态；右键地面移动、右键敌军攻击；也可使用全军推进/坚守。</div>
-      <div class="muted">战斗核心：队形、士气、疲劳、地形与溃败。战车适合侧击和追击，不适合在森林、泥地里硬冲。</div>
-    </div>
+    </header>
+
+    <main class="battle-stage">
+      <canvas id="battle-canvas" aria-label="实时战场，选择己方军阵并下达移动与攻击命令"></canvas>
+
+      <aside class="battle-roster battle-roster-left">
+        <div class="battle-roster-heading"><b>我方军阵</b><span>左键选中部队</span></div>
+        <div id="battle-player-roster" class="battle-roster-list"></div>
+        <div class="battle-side-note">金色旗帜 · 商军</div>
+      </aside>
+
+      <aside class="battle-roster battle-roster-right">
+        <div class="battle-roster-heading"><b>敌方军阵</b><span>敌军态势</span></div>
+        <div id="battle-enemy-roster" class="battle-roster-list"></div>
+        <div class="battle-minimap-wrap">
+          <div class="battle-roster-heading"><b>战场总览</b><span>点击定位</span></div>
+          <canvas id="battle-minimap" width="220" height="132"></canvas>
+        </div>
+        <div class="battle-side-note">赤褐旗帜 · 敌方</div>
+      </aside>
+
+      <div class="battle-compass" aria-hidden="true"><span>N</span><b>↑</b></div>
+      <div class="battle-camera-hint">左键拖动平移 · 滚轮缩放 · 右键下令</div>
+    </main>
+
+    <footer class="battle-command-dock">
+      <section class="battle-selection">
+        <small>当前指挥单位</small>
+        <b id="battle-selected-title">未选择部队</b>
+        <div id="battle-unit-detail">左键选择己方军阵；右键地面移动，右键敌军攻击。可使用下方战术命令。</div>
+      </section>
+      <section class="battle-command-panel">
+        <div class="battle-command-group">
+          <button id="battle-charge" class="battle-command-primary">冲锋接敌</button>
+          <button id="battle-flank">侧翼迂回</button>
+          <button id="battle-reform">整队重整</button>
+          <button id="battle-hold-selected">就地固守</button>
+        </div>
+        <div class="battle-camera-controls">
+          <button id="battle-zoom-out" title="缩小战场">−</button>
+          <button id="battle-zoom-in" title="放大战场">＋</button>
+          <button id="battle-camera-reset">重置视角</button>
+        </div>
+      </section>
+    </footer>
   </div>
 
-  <script src="data.js?v=1.10.0"></script>
-  <script src="battle.js?v=1.10.0"></script>
-  <script src="game.js?v=1.10.0"></script>
+  <script src="data.js?v=1.11.0"></script>
+  <script src="battle.js?v=1.11.0"></script>
+  <script src="game.js?v=1.11.0"></script>
 </body>
 </html>
