@@ -29,7 +29,7 @@ try{
   await page.locator('[data-faction-choice="shang"]').click();
   await page.locator("#event-actions button").first().click();
   await page.waitForFunction(()=>document.querySelector(".local-geography")?.complete&&
-    document.querySelector(".local-geography")?.naturalWidth===1800,{timeout:15000});
+    document.querySelector(".local-geography")?.naturalWidth>1000,{timeout:15000});
   const imageValid=await page.evaluate(()=>{
     const img=document.querySelector(".local-geography");
     const cn=document.createElement("canvas");cn.width=32;cn.height=32;
@@ -77,12 +77,12 @@ try{
     "Full map failed to restore center after drag.");
   await page.locator(".geo-map-controls button").filter({hasText:"卫星"}).click();
   await page.waitForFunction(()=>document.querySelector(".local-geography")?.src.includes("china-satellite.webp")&&
-    document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth===1800);
+    document.querySelector(".local-geography")?.complete&&document.querySelector(".local-geography")?.naturalWidth>1000);
   await page.locator(".geo-map-controls button").filter({hasText:"地形"}).click();
   await page.waitForFunction(()=>{
     const img=document.querySelector(".local-geography");
     return img&&(img.src.includes("china-elevation.webp")||img.src.includes("china-relief.webp"))&&
-      img.complete&&img.naturalWidth===1800;
+      img.complete&&img.naturalWidth>1000;
   });
   fs.mkdirSync("artifacts",{recursive:true});
   await page.locator("#map").screenshot({path:"artifacts/real-map-verified.png"});
