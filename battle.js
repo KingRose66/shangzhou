@@ -620,6 +620,7 @@
     this.projectiles=[];
     this.clock=0;
     this.hudClock=0;
+    this.commandNotice="";
     this.suppressClick=false;
     _baseBattle.start.call(this,config);
     this.renderBattleHud(true);
@@ -726,7 +727,7 @@
     if(this.status){
       this.status.textContent=(this.config.locationName||"野外战场")+" · "+(this.config.terrainName||"地形")+
         " · 我军 "+fmtBattle(total(player))+" / 敌军 "+fmtBattle(total(enemy))+" · "+
-        (this.paused?"战场暂停":"实时交战");
+        (this.paused?"战场暂停":"实时交战")+(this.commandNotice?" · "+this.commandNotice:"");
     }
     const rosterHtml=(list,side)=>list.map(u=>{
       const morale=Math.max(0,Math.min(100,u.morale));
@@ -799,6 +800,7 @@
       u.reforming=true;u.formation="line";
       this.status.textContent=u.name+"：整队重整，暂缓主动接战。";
     }
+    this.commandNotice=this.status?this.status.textContent:"";
     this.renderBattleHud(true);
   };
 
@@ -820,7 +822,7 @@
 
   BattleEngine.prototype.handleOrder=function(e){
     _baseBattle.handleOrder.call(this,e);
-    if(this.selected&&this.status)this.status.textContent=this.selected.name+"：已下达战术命令。";
+    this.commandNotice=this.selected?this.selected.name+"：已下达战术命令。":"已下达战术命令。";
     this.renderBattleHud(true);
   };
 
