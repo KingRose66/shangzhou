@@ -731,11 +731,9 @@ function geographicRoutes(map,m,selectedEdges,plannedEdges,fieldEdges){
         const px=(e.clientX-rect.left)/Math.max(1,rect.width)*m.w;
         const py=(e.clientY-rect.top)/Math.max(1,rect.height)*m.h;
         const vx=b.x-a.x,vy=b.y-a.y,den=Math.max(1,vx*vx+vy*vy);
-        const t=Math.max(.06,Math.min(.94,((px-a.x)*vx+(py-a.y)*vy)/den));
-        state.selectedRoadSegment={from:s.id,to:id,t:t,
-          lon:s.lon+(t.id?0:(t.lon-s.lon)*t),lat:s.lat+(t.lat-s.lat)*t};
-        state.selectedRoadSegment.lon=s.lon+(t.lon-s.lon)*t;
-        state.selectedRoadSegment.lat=s.lat+(t.lat-s.lat)*t;
+        const progress=Math.max(.06,Math.min(.94,((px-a.x)*vx+(py-a.y)*vy)/den));
+        state.selectedRoadSegment={from:s.id,to:id,t:progress,
+          lon:s.lon+(t.lon-s.lon)*progress,lat:s.lat+(t.lat-s.lat)*progress};
         render();
       });
       svg.appendChild(hit);
